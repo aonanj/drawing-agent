@@ -3,6 +3,7 @@
 __all__ = [
     "cli",
     "dataset",
+    "patent_figures",
     "preprocess",
     "training",
     "utils",

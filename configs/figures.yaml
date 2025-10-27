@@ -1,0 +1,18 @@
+# Figure dataset configuration for USPTO drawing packages.
+
+storage:
+  raw_dir: data/raw
+  processed_dir: data/figures/processed
+  cache_dir: data/figures/cache
+
+image:
+  size: 1024
+  min_gap: 40
+  gap_threshold: 0.005
+
+splits:
+  train: 0.8
+  validation: 0.1
+  test: 0.1
+
+seed: 42

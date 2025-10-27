@@ -1,6 +1,6 @@
 # drawing-agent: SDXL QLoRA Fine-Tuning Workspace
 
-This project contains the workspace scaffolding for fine-tuning a Stable Diffusion XL model using QLoRA to generate patent-ready drawings from claim text.
+This project contains the workspace scaffolding for fine-tuning a Stable Diffusion XL model using QLoRA to generate patent-ready drawings from patent description and claims text.
 
 ## Repository Layout
 
