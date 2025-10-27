@@ -8,6 +8,11 @@ venv/
 
 # Data
 outputs/
+data/raw/
+data/processed/
+data/
+docs/
+*.png
 
 # Notebooks
 .ipynb_checkpoints/

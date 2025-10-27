@@ -1,8 +1,8 @@
-# QLoRA fine-tuning configuration for SDXL.
+# Quick test configuration for SDXL QLoRA training
 seed: 42
-project_name: drawing-agent
-run_name: sdxl-qlora-prototype
-output_dir: outputs/sdxl-qlora
+project_name: drawing-agent-test
+run_name: sdxl-qlora-test
+output_dir: outputs/test
 
 model:
   pretrained_model_name_or_path: stabilityai/stable-diffusion-xl-base-1.0
@@ -11,8 +11,8 @@ model:
   cache_dir: .cache/huggingface
 
 qlora:
-  r: 32
-  alpha: 16
+  r: 8  # Smaller rank for faster testing
+  alpha: 8
   dropout: 0.05
   target_modules:
     - to_k
@@ -26,9 +26,9 @@ qlora:
 training:
   resolution: 1024
   train_batch_size: 1
-  gradient_accumulation_steps: 8
-  max_train_steps: 1000
-  checkpointing_steps: 100
+  gradient_accumulation_steps: 2
+  max_train_steps: 5  # Just 5 steps for testing
+  checkpointing_steps: 5
   save_adapters_only: true
   mixed_precision: bf16
   gradient_checkpointing: true
@@ -39,9 +39,9 @@ optimizer:
   learning_rate: 1.0e-4
   betas: [0.9, 0.999]
   weight_decay: 0.01
-  lr_scheduler: cosine_with_restarts
+  lr_scheduler: constant
   num_cycles: 1
-  warmup_steps: 100
+  warmup_steps: 0
 
 data:
   dataset_config: configs/dataset.figures.yaml
@@ -53,7 +53,7 @@ data:
 
 logging:
   report_to: wandb
-  logging_steps: 10
+  logging_steps: 1
   gradient_checkpointing: true
 
 hardware:
@@ -63,6 +63,6 @@ hardware:
   enable_flash_attention: false
 
 evaluation:
-  steps: 200
-  num_validation_images: 8
+  steps: 10
+  num_validation_images: 4
   use_reference_images: true

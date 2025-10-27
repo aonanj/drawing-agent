@@ -11,10 +11,10 @@ if [[ ! -f "${ACCELERATE_CONFIG}" ]]; then
   exit 1
 fi
 
-source "${PROJECT_ROOT}/.venv/drawing-agent/bin/activate"
+source "${PROJECT_ROOT}/.venv/bin/activate"
 
 accelerate launch \
   --config_file "${ACCELERATE_CONFIG}" \
   -m src.tuning.cli \
-  train \
+  train-model \
   --config "${CONFIG_PATH}"

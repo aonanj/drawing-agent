@@ -1,0 +1,41 @@
+# Dataset configuration for SDXL QLoRA fine-tuning with USPTO patent figures.
+name: patent-figures-dataset
+description: >
+  USPTO patent drawings with structured prompts, control maps (Canny edges),
+  and metadata from patent XML files.
+
+storage:
+  # This dataset is already processed by process_uspto_data
+  processed_dir: data/figures/processed/hf_dataset
+
+# Schema matches the output of patent_figures.py processing
+# No need to rebuild - dataset is already in HuggingFace format
+schema:
+  prompt: string
+  figure_no: string
+  diagram_type: string
+  patent_id: string
+  pub_kind: string
+  family_id: string
+  cpc: [string]
+  source: string
+  metadata: string
+  image: Image
+  control: Image
+
+# Data is already split by process_uspto_data
+splits:
+  train: train
+  validation: validation
+  test: test
+
+# Column mapping for training
+columns:
+  prompt_column: prompt
+  image_column: image
+  control_column: control
+
+image_processing:
+  resolution: 1024
+  center_crop: true
+  random_flip: false
