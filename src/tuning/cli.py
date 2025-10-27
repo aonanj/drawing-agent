@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import inspect
 from pathlib import Path
-from functools import wraps
 
 import typer
 from rich.console import Console

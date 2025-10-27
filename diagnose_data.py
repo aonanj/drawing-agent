@@ -36,7 +36,7 @@ def diagnose_raw_data(raw_dir: Path):
         print("        ├── US12345678.zip     (individual patent zip)")
         print("        └── US12345679.zip")
         print()
-        print("Download USPTO patent data from: https://bulkdata.uspto.gov/")
+        print("Download USPTO patent data from: https://data.uspto.gov/bulkdata/datasets")
         return False
     
     print(f"✓ Found {len(bulk_folders)} bulk download folder(s):")
@@ -138,7 +138,7 @@ def diagnose_raw_data(raw_dir: Path):
         print("2. Wrong directory structure (zips should be directly in bulk folders)")
         print("3. Downloaded wrong type of USPTO data (need patent grants with drawings)")
         print()
-        print("Download correct data from: https://bulkdata.uspto.gov/")
+        print("Download correct data from: https://data.uspto.gov/bulkdata/datasets")
         return False
     
     print(f"✓ Found {total_valid} valid patents that can be processed")

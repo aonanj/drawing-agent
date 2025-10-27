@@ -11,11 +11,9 @@ from accelerate import Accelerator
 from datasets import DatasetDict
 from diffusers.pipelines.auto_pipeline import AutoPipelineForText2Image
 from diffusers.optimization import get_scheduler
-from diffusers.training_utils import compute_snr
 from omegaconf import DictConfig
 from peft import LoraConfig, get_peft_model
-from PIL import Image
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 
@@ -163,6 +161,9 @@ class SDXLQLoraTrainer:
 
     def _setup_optimizer(self) -> None:
         """Set up optimizer and learning rate scheduler."""
+        if self.unet is None:
+            raise RuntimeError("setup_models() must be called before _setup_optimizer()")
+        
         optimizer_cfg = self.config.get("optimizer", {})
         training_cfg = self.config.get("training", {})
 
@@ -213,6 +214,9 @@ class SDXLQLoraTrainer:
 
     def train(self) -> None:
         """Main training loop for SDXL QLoRA fine-tuning."""
+        if self.vae is None or self.unet is None or self.noise_scheduler is None:
+            raise RuntimeError("setup_models() must be called before train()")
+        
         training_cfg = self.config.get("training", {})
         data_cfg = self.config.get("data", {})
         logging_cfg = self.config.get("logging", {})
@@ -242,8 +246,21 @@ class SDXLQLoraTrainer:
         )
         train_dataset.set_format(type="torch")
 
+        # Wrap in a PyTorch Dataset for type compatibility
+        class HFDatasetWrapper(Dataset):
+            def __init__(self, hf_dataset):
+                self.hf_dataset = hf_dataset
+            
+            def __len__(self):
+                return len(self.hf_dataset)
+            
+            def __getitem__(self, idx):
+                return self.hf_dataset[idx]
+
+        wrapped_dataset = HFDatasetWrapper(train_dataset)
+
         train_dataloader = DataLoader(
-            train_dataset,
+            wrapped_dataset,
             batch_size=train_batch_size,
             shuffle=True,
             collate_fn=collate_fn,
@@ -413,6 +430,8 @@ class SDXLQLoraTrainer:
             logger.info(f"Saved LoRA adapters to {save_path}")
         else:
             # Save full pipeline
+            if self.pipeline is None:
+                raise RuntimeError("Pipeline is not initialized. Call setup_models() first.")
             unwrapped_unet = self.accelerator.unwrap_model(self.unet)
             self.pipeline.unet = unwrapped_unet
             self.pipeline.save_pretrained(save_path)

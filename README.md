@@ -2,7 +2,7 @@
 
 Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. This project provides a complete pipeline for processing USPTO patent data and training a model to generate patent-compliant line art.
 
-## 🚀 Features
+## ➣ Features
 
 - **Automated USPTO Data Processing**: Parse XML patent files, extract claims and descriptions, process multi-figure TIFF images
 - **Intelligent Image Processing**: Binarization, deskewing, denoising, and splitting of multi-figure sheets
@@ -12,7 +12,7 @@ Generate patent-style technical drawings from text using fine-tuned Stable Diffu
 - **QLoRA Fine-tuning**: Memory-efficient 4-bit quantized training with LoRA adapters
 - **CLI Tools**: Easy-to-use commands for processing and training
 
-## 📋 Quick Start
+## ➣ Quick Start
 
 ```bash
 # 1. Setup environment
@@ -38,7 +38,7 @@ bash scripts/run_finetune.sh
 
 📖 **See [QUICKSTART.md](QUICKSTART.md) for detailed instructions**
 
-## 🧪 Test Single Patent
+## ➣ Test Single Patent
 
 Before processing large batches, test with a single patent:
 
@@ -53,7 +53,7 @@ python test_single_patent.py data/raw/redbook_2024_01/US12345678.zip
 # - Metadata JSON
 ```
 
-## 📂 Repository Layout
+## ➣ Repository Layout
 
 ```
 drawing-agent/
@@ -93,7 +93,7 @@ drawing-agent/
 └── README.md                    # This file
 ```
 
-## 🛠️ CLI Commands
+## ➣ CLI Commands
 
 ```bash
 # Process USPTO patent figures
@@ -109,7 +109,7 @@ python -m src.tuning.cli train-model --config configs/training.sdxl-qlora.yaml
 python -m src.tuning.cli info
 ```
 
-## 📊 Dataset Structure
+## ➣ Dataset Structure
 
 Each training sample includes:
 - **Target Image**: Processed patent figure (1024×1024, monochrome)
@@ -125,7 +125,7 @@ Each training sample includes:
   ```
 - **Metadata**: Patent ID, CPC codes, family ID, claims, abstract
 
-## 🔧 Configuration
+## ➣ Configuration
 
 ### USPTO Processing (`configs/figures.yaml`)
 
@@ -165,7 +165,7 @@ training:
   learning_rate: 1.0e-4
 ```
 
-## 💻 Hardware Requirements
+## ➣ Hardware Requirements
 
 **Minimum:**
 - 1× GPU with 24GB VRAM (RTX 4090, A10G)
@@ -182,13 +182,13 @@ training:
 - 1000 patents: ~30-90 minutes
 - Training: ~2-8 hours for 1000 steps
 
-## 📚 Documentation
+## ➣ Documentation
 
 - **[QUICKSTART.md](QUICKSTART.md)**: Complete workflow from setup to inference
 - **[docs/USPTO_PROCESSING_GUIDE.md](docs/USPTO_PROCESSING_GUIDE.md)**: Detailed processing pipeline documentation
 - **[docs/blueprint.md](docs/blueprint.md)**: System architecture and design decisions
 
-## 🧰 Key Features
+## ➣ Key Features
 
 ### XML Parsing
 - Extracts figure descriptions, claims, CPC codes
@@ -216,7 +216,7 @@ training:
 - Tertiary: Claim-derived constraints
 - Style enforcement & prohibitions
 
-## 🔍 Quality Validation
+## ➣ Quality Validation
 
 Automatic quality checks:
 - Resolution validation (min 512×512)
@@ -225,7 +225,7 @@ Automatic quality checks:
 - Multi-XML file detection
 - Patent family deduplication
 
-## 🎯 Model Generation
+## ➣ Model Generation
 
 After training, generate drawings:
 
@@ -254,7 +254,7 @@ image = pipeline(prompt, num_inference_steps=50).images[0]
 image.save("patent_drawing.png")
 ```
 
-## 🐛 Troubleshooting
+## ➣ Troubleshooting
 
 **CUDA out of memory:**
 - Reduce `train_batch_size` to 1
@@ -273,7 +273,7 @@ image.save("patent_drawing.png")
 
 See [docs/USPTO_PROCESSING_GUIDE.md](docs/USPTO_PROCESSING_GUIDE.md) for more troubleshooting.
 
-## 📊 Dataset Statistics
+## ➣ Dataset Statistics
 
 After processing, view summary:
 ```bash
@@ -286,7 +286,7 @@ Includes:
 - CPC code distribution
 - Publication kind stats
 
-## 🤝 Contributing
+## ➣ Contributing
 
 When adding features:
 1. Test with single patent first
@@ -294,13 +294,13 @@ When adding features:
 3. Update documentation
 4. Run full test suite
 
-## 📄 License
+## ➣ License
 
 See LICENSE file for details.
 
-## 🔗 Resources
+## ➣ Resources
 
-- **USPTO Bulk Data**: https://bulkdata.uspto.gov/
+- **USPTO Bulk Data**: https://data.uspto.gov/bulkdata/datasets 
 - **SDXL**: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
 - **QLoRA/PEFT**: https://huggingface.co/docs/peft
 - **Accelerate**: https://huggingface.co/docs/accelerate
