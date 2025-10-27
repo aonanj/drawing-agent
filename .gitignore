@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+
+# Data
+data/claims/raw/
+data/claims/processed/
+data/claims/cache/
+data/
+outputs/
+
+# Notebooks
+.ipynb_checkpoints/
+docs/
+
+# Accelerate/W&B
+wandb/
+logs/
+
+# OS
+.DS_Store

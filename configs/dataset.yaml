@@ -1,0 +1,40 @@
+# Dataset configuration for SDXL QLoRA fine-tuning.
+name: patent-claims-dataset
+description: >
+  Structured prompts derived from patent claims paired with patent drawings
+  or generated reference imagery.
+
+storage:
+  raw_dir: data/claims/raw
+  processed_dir: data/claims/processed
+  cache_dir: data/claims/cache
+
+schema:
+  id: string
+  claim_text: string
+  category: string  # e.g., apparatus, method, composition
+  figure_refs: [string]
+  negative_prompt: string
+  reference_path: string  # optional path to reference drawing/image
+
+splits:
+  train: 0.8
+  validation: 0.1
+  test: 0.1
+
+prompt_template:
+  base: >
+    Patent drawing of {category} illustrating {main_feature}. Claim: {claim_text}
+  negative: "{negative_prompt}"
+
+tokenization:
+  model: stabilityai/stable-diffusion-xl-base-1.0
+  max_length: 256
+  truncation: true
+  padding: true
+
+image_processing:
+  resolution: 1024
+  center_crop: true
+  random_flip: false
+  num_images_per_prompt: 1

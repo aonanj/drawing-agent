@@ -1,0 +1,68 @@
+# QLoRA fine-tuning configuration for SDXL.
+seed: 42
+project_name: drawing-agent
+run_name: sdxl-qlora-prototype
+output_dir: outputs/sdxl-qlora
+
+model:
+  pretrained_model_name_or_path: stabilityai/stable-diffusion-xl-base-1.0
+  revision: fp16
+  variant: fp16
+  cache_dir: .cache/huggingface
+
+qlora:
+  r: 32
+  alpha: 16
+  dropout: 0.05
+  target_modules:
+    - to_k
+    - to_q
+    - to_v
+    - to_out.0
+  quantization_bits: 4
+  compute_dtype: bf16
+  use_gradient_checkpointing: true
+
+training:
+  resolution: 1024
+  train_batch_size: 1
+  gradient_accumulation_steps: 8
+  max_train_steps: 1000
+  checkpointing_steps: 100
+  save_adapters_only: true
+  mixed_precision: bf16
+  gradient_checkpointing: true
+  enable_xformers_memory_efficient_attention: true
+
+optimizer:
+  type: adamw_8bit
+  learning_rate: 1.0e-4
+  betas: [0.9, 0.999]
+  weight_decay: 0.01
+  lr_scheduler: cosine_with_restarts
+  num_cycles: 1
+  warmup_steps: 100
+
+data:
+  dataset_config: configs/dataset.yaml
+  train_split: train
+  validation_split: validation
+  image_column: pixel_values
+  prompt_column: prompt
+  negative_prompt_column: negative_prompt
+
+logging:
+  report_to: wandb
+  logging_steps: 10
+  gradient_checkpointing: true
+
+hardware:
+  mixed_precision: bf16
+  use_cpu_offload: false
+  gradient_checkpointing: true
+  enable_flash_attention: false
+
+evaluation:
+  steps: 200
+  num_validation_images: 8
+  use_reference_images: true
