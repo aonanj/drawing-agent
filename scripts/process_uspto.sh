@@ -7,14 +7,14 @@ PROJECT_ROOT="${GOOGLE_DRIVE_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && p
 CONFIG_PATH="${CONFIG_PATH:-${PROJECT_ROOT}/configs/figures.yaml}"
 
 # Activate virtual environment
-VENV_PATH="${PROJECT_ROOT}/.venv"
-if [[ -d "${VENV_PATH}" ]]; then
-    source "${VENV_PATH}/bin/activate"
-else
-    echo "Virtual environment not found at ${VENV_PATH}."
-    echo "Please run 'scripts/setup_environment.sh' or ensure your environment is correctly set up."
-    exit 1
-fi
+# VENV_PATH="${PROJECT_ROOT}/.venv"
+# if [[ -d "${VENV_PATH}" ]]; then
+#     source "${VENV_PATH}/bin/activate"
+# else
+#     echo "Virtual environment not found at ${VENV_PATH}."
+#     echo "Please run 'scripts/setup_environment.sh' or ensure your environment is correctly set up."
+#     exit 1
+# fi
 
 echo "========================================"
 echo "  USPTO Patent Figure Processing"

@@ -11,7 +11,7 @@ if [[ ! -f "${ACCELERATE_CONFIG}" ]]; then
   exit 1
 fi
 
-source "${PROJECT_ROOT}/.venv/bin/activate"
+#source "${PROJECT_ROOT}/.venv/bin/activate"
 
 accelerate launch \
   --config_file "${ACCELERATE_CONFIG}" \
