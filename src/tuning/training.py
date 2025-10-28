@@ -8,9 +8,10 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
-from datasets import DatasetDict
+from datasets import concatenate_datasets, DatasetDict, Dataset as HFDataset
 from diffusers.pipelines.auto_pipeline import AutoPipelineForText2Image
 from diffusers.optimization import get_scheduler
+import gc
 from omegaconf import DictConfig
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader, Dataset
@@ -70,6 +71,7 @@ class SDXLQLoraTrainer:
             torch_dtype=torch_dtype,
             variant=model_cfg.get("variant", "fp16"),
             use_safetensors=True,
+            cache_dir=model_cfg.get("cache_dir"),  # <--- THIS IS THE FIX
         )
         self.unet = self.pipeline.unet
         self.text_encoders = [self.pipeline.text_encoder, self.pipeline.text_encoder_2]
@@ -230,8 +232,7 @@ class SDXLQLoraTrainer:
         logging_steps = logging_cfg.get("logging_steps", 10)
         save_adapters_only = training_cfg.get("save_adapters_only", True)
 
-        # Prepare dataset
-        train_dataset = self.dataset[data_cfg.get("train_split", "train")]
+
 
         # Create data loader with custom collation
         def collate_fn(examples):
@@ -239,12 +240,60 @@ class SDXLQLoraTrainer:
             prompts = [example["prompts"] for example in examples]
             return {"pixel_values": pixel_values, "prompts": prompts}
 
-        train_dataset = train_dataset.map(
-            self._preprocess_images,
-            batched=True,
-            batch_size=train_batch_size,
-            remove_columns=train_dataset.column_names,
-        )
+        # Prepare dataset
+        base_train_dataset = self.dataset[data_cfg.get("train_split", "train")]
+        
+        # --- SHARDING & GARBAGE COLLECTION FIX ---
+        num_shards = 10  # Increased to 10 for smaller, safer chunks
+        processed_shard_paths = []
+        
+        model_cache_dir = Path(self.config.get("model", {}).get("cache_dir", ".cache/huggingface"))
+        dataset_map_cache_dir = model_cache_dir / "datasets_cache"
+        ensure_dir(dataset_map_cache_dir)
+        
+        logger.info(f"Mapping dataset in {num_shards} shards to force garbage collection...")
+        
+        for i in range(num_shards):
+            logger.info(f"--- Processing Shard {i+1} of {num_shards} ---")
+            
+            # Get one shard
+            shard = base_train_dataset.shard(num_shards=num_shards, index=i, contiguous=True)
+            
+            # Define a unique cache file FOR THIS SHARD on Google Drive
+            shard_cache_file = dataset_map_cache_dir / f"train_map_shard_{i}_of_{num_shards}.arrow"
+            processed_shard_paths.append(str(shard_cache_file))
+            
+            # Map just this one shard, writing to its own cache file
+            processed_shard = shard.map(
+                self._preprocess_images,
+                batched=True,
+                batch_size=train_batch_size,
+                remove_columns=base_train_dataset.column_names,
+                cache_file_name=str(shard_cache_file),
+            )
+            
+            # --- This is the new, critical part ---
+            logger.info(f"Shard {i+1} mapped. Deleting objects to free VM disk space.")
+            del shard
+            del processed_shard
+            gc.collect()
+            logger.info(f"--- Shard {i+1} complete and memory freed. ---")
+
+        logger.info("All shards mapped. Reloading from cache files on Google Drive...")
+        
+        # Reload all the processed shards from their cache files
+        processed_shards = [
+            HFDataset.from_file(path) for path in processed_shard_paths
+        ]
+        
+        train_dataset = concatenate_datasets(processed_shards)
+        logger.info("All shards concatenated into final training set.")
+        # --- END SHARDING & GARBAGE COLLECTION FIX ---
+
+        # Create data loader with custom collation
+
+        # Create data loader with custom collation
+
         train_dataset.set_format(type="torch")
 
         # Wrap in a PyTorch Dataset for type compatibility
