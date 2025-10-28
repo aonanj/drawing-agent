@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 
+from . import config as path_config
 from .dataset import load_dataset_dict
 from .utils import ensure_dir, flatten_config, load_config
 
@@ -34,7 +35,7 @@ class SDXLQLoraTrainer:
             gradient_accumulation_steps=training_cfg.get("gradient_accumulation_steps", 1),
             mixed_precision=training_cfg.get("mixed_precision", "bf16"),
             log_with=config.get("logging", {}).get("report_to"),
-            project_dir=config.get("output_dir", "outputs"),
+            project_dir=config.get("output_dir", str(path_config.OUTPUTS_DIR)),
         )
         if self.accelerator.is_main_process:
             self.accelerator.init_trackers(config.get("project_name", "drawing-agent"),
@@ -102,7 +103,7 @@ class SDXLQLoraTrainer:
                     encoder.gradient_checkpointing_enable()
 
         self.pipeline.to(self.accelerator.device)
-        ensure_dir(Path(self.config.get("output_dir", "outputs")))
+        ensure_dir(Path(self.config.get("output_dir", str(path_config.OUTPUTS_DIR))))
 
     def _preprocess_images(self, examples: dict[str, Any]) -> dict[str, Any]:
         """Preprocess images and prompts for training."""
@@ -414,7 +415,7 @@ class SDXLQLoraTrainer:
 
     def _save_checkpoint(self, save_adapters_only: bool = True, is_final: bool = False) -> None:
         """Save model checkpoint."""
-        output_dir = Path(self.config.get("output_dir", "outputs"))
+        output_dir = Path(self.config.get("output_dir", str(path_config.OUTPUTS_DIR)))
 
         if is_final:
             save_path = output_dir / "final"
@@ -444,7 +445,7 @@ class SDXLQLoraTrainer:
 
 def train(config_path: Path) -> None:
     config = load_config(config_path)
-    dataset_cfg_path = Path(config.get("data", {}).get("dataset_config", "configs/dataset.yaml"))
+    dataset_cfg_path = Path(config.get("data", {}).get("dataset_config", path_config.CONFIG_DIR / "dataset.yaml"))
     dataset_config = load_config(dataset_cfg_path)
 
     # Check if this is a pre-processed dataset (like figures) or needs building (like claims)

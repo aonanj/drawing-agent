@@ -13,6 +13,8 @@ from src.tuning.xml_parser import USPTOXMLParser
 from src.tuning.image_processing import TIFFImageProcessor, validate_image_quality
 import zipfile
 
+from src.tuning import config as path_config
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -212,7 +214,7 @@ def test_single_patent(zip_path: Path, output_dir: Path):
     print("\n" + "=" * 60)
     print("✓ Test completed successfully!")
     print("\nIf everything looks good, proceed with batch processing:")
-    print("   bash scripts/process_uspto.sh")
+    print(f"   GOOGLE_DRIVE_PATH=/path/to/colab/drawing-agent bash {path_config.SCRIPTS_DIR}/process_uspto.sh")
 
 
 if __name__ == "__main__":

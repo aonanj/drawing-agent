@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.logging import RichHandler
 
+from . import config
 from .dataset import load_dataset_dict
 from .patent_figures import process_uspto_data
 from .training import train
@@ -30,8 +31,8 @@ app = typer.Typer(
 
 @app.command()
 def process_figures(
-    config: Path = typer.Option(
-        Path("configs/figures.yaml"),
+    config_path: Path = typer.Option(
+        config.CONFIG_DIR / "figures.yaml",
         "--config",
         "-c",
         help="Path to figures configuration file",
@@ -50,10 +51,10 @@ def process_figures(
     6. Save HuggingFace dataset with train/val/test splits
     """
     console.print("[bold blue]Processing USPTO patent figures...[/bold blue]")
-    console.print(f"Config: {config}")
+    console.print(f"Config: {config_path}")
 
     try:
-        dataset_dict = process_uspto_data(config)
+        dataset_dict = process_uspto_data(config_path)
         
         console.print("\n[bold green]✓ Processing complete![/bold green]")
         console.print(f"Train samples: {len(dataset_dict['train'])}")
@@ -68,8 +69,8 @@ def process_figures(
 
 @app.command()
 def prepare_claims(
-    config: Path = typer.Option(
-        Path("configs/dataset.yaml"),
+    config_path: Path = typer.Option(
+        config.CONFIG_DIR / "dataset.yaml",
         "--config",
         "-c",
         help="Path to dataset configuration file",
@@ -82,10 +83,10 @@ def prepare_claims(
     This is an alternative to process_figures for simpler claim-based datasets.
     """
     console.print("[bold blue]Preparing claims dataset...[/bold blue]")
-    console.print(f"Config: {config}")
+    console.print(f"Config: {config_path}")
     
     try:
-        dataset_dict = load_dataset_dict(config)
+        dataset_dict = load_dataset_dict(config_path)
         
         console.print("\n[bold green]✓ Dataset prepared![/bold green]")
         console.print(f"Train samples: {len(dataset_dict['train'])}")
@@ -100,8 +101,8 @@ def prepare_claims(
 
 @app.command()
 def train_model(
-    config: Path = typer.Option(
-        Path("configs/training.sdxl-qlora.yaml"),
+    config_path: Path = typer.Option(
+        config.CONFIG_DIR / "training.sdxl-qlora.yaml",
         "--config",
         "-c",
         help="Path to training configuration file",
@@ -112,13 +113,13 @@ def train_model(
     Fine-tune SDXL model with QLoRA adapters.
     
     This command should be run with accelerate:
-        accelerate launch -m src.tuning.cli train --config configs/training.sdxl-qlora.yaml
+        accelerate launch -m src.tuning.cli train --config {config.CONFIG_DIR / "training.sdxl-qlora.yaml"}
     """
     console.print("[bold blue]Starting SDXL QLoRA training...[/bold blue]")
-    console.print(f"Config: {config}")
+    console.print(f"Config: {config_path}")
     
     try:
-        train(config)
+        train(config_path)
         console.print("\n[bold green]✓ Training complete![/bold green]")
         
     except Exception as e:
@@ -133,8 +134,8 @@ def info() -> None:
     console.print("[bold]Drawing Agent - Patent Drawing Generation[/bold]\n")
     
     # Check for processed datasets
-    figures_dataset = Path("data/figures/processed/hf_dataset")
-    claims_dataset = Path("data/claims/processed/hf_dataset")
+    figures_dataset = config.FIGURES_PROCESSED_DIR / "hf_dataset"
+    claims_dataset = config.CLAIMS_PROCESSED_DIR / "hf_dataset"
     
     console.print("[bold]Datasets:[/bold]")
     if figures_dataset.exists():
@@ -148,14 +149,14 @@ def info() -> None:
         console.print("  ✗ Claims dataset not found")
     
     # Check for raw data
-    raw_dir = Path("data/raw")
+    raw_dir = config.RAW_DATA_DIR
     if raw_dir.exists():
         bulk_folders = [d for d in raw_dir.iterdir() if d.is_dir()]
         console.print("\n[bold]Raw Data:[/bold]")
         console.print(f"  Found {len(bulk_folders)} bulk download folders in {raw_dir}")
     
     # Check for training outputs
-    output_dir = Path("outputs/sdxl-qlora")
+    output_dir = config.SDXL_QLORA_OUTPUT_DIR
     if output_dir.exists():
         checkpoints = list(output_dir.glob("checkpoint-*"))
         console.print("\n[bold]Training Outputs:[/bold]")

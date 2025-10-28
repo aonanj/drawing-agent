@@ -12,6 +12,7 @@ from datasets import Dataset, DatasetDict, Features, Image as HFImage, Value
 from omegaconf import DictConfig
 from tqdm import tqdm
 
+from . import config as path_config
 from .image_processing import TIFFImageProcessor, validate_image_quality
 from .utils import ensure_dir, load_config
 from .xml_parser import PatentData, USPTOXMLParser, extract_figure_context
@@ -41,9 +42,9 @@ class PatentFiguresProcessor:
         self.config = config
         storage_cfg = config.get("storage", {})
         
-        self.raw_dir = Path(storage_cfg.get("raw_dir", "data/raw"))
-        self.processed_dir = Path(storage_cfg.get("processed_dir", "data/figures/processed"))
-        self.cache_dir = Path(storage_cfg.get("cache_dir", "data/figures/cache"))
+        self.raw_dir = Path(storage_cfg.get("raw_dir", path_config.FIGURES_RAW_DIR))
+        self.processed_dir = Path(storage_cfg.get("processed_dir", path_config.FIGURES_PROCESSED_DIR))
+        self.cache_dir = Path(storage_cfg.get("cache_dir", path_config.FIGURES_CACHE_DIR))
         
         ensure_dir(self.processed_dir)
         ensure_dir(self.cache_dir)
@@ -93,7 +94,7 @@ class PatentFiguresProcessor:
         if not bulk_folders:
             raise ValueError(
                 f"No bulk download folders found in {self.raw_dir}. "
-                "Please add USPTO patent data to data/raw/"
+                f"Please add USPTO patent data to {path_config.RAW_DATA_DIR}"
             )
         
         # Process each bulk download

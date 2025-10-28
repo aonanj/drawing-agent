@@ -9,6 +9,7 @@ from typing import Iterable
 from datasets import Dataset, DatasetDict, Features, Value
 from omegaconf import DictConfig
 
+from . import config as path_config
 from .utils import ensure_dir, load_config
 
 logger = logging.getLogger(__name__)
@@ -28,13 +29,17 @@ class ClaimsDatasetBuilder:
         self.config = config
         storage_cfg = config.get("storage")
         if storage_cfg is None:
-            raise ValueError("Dataset config missing `storage` section.")
-
-        self.paths = DatasetPaths(
-            raw_dir=Path(storage_cfg.get("raw_dir", "data/claims/raw")),
-            processed_dir=Path(storage_cfg.get("processed_dir", "data/claims/processed")),
-            cache_dir=Path(storage_cfg.get("cache_dir", "data/claims/cache")),
-        )
+            self.paths = DatasetPaths(
+                raw_dir=path_config.CLAIMS_RAW_DIR,
+                processed_dir=path_config.CLAIMS_PROCESSED_DIR,
+                cache_dir=path_config.CLAIMS_CACHE_DIR,
+            )
+        else:
+            self.paths = DatasetPaths(
+                raw_dir=Path(storage_cfg.get("raw_dir", path_config.CLAIMS_RAW_DIR)),
+                processed_dir=Path(storage_cfg.get("processed_dir", path_config.CLAIMS_PROCESSED_DIR)),
+                cache_dir=Path(storage_cfg.get("cache_dir", path_config.CLAIMS_CACHE_DIR)),
+            )
         ensure_dir(self.paths.processed_dir)
         ensure_dir(self.paths.cache_dir)
 
