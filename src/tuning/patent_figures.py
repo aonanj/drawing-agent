@@ -77,15 +77,6 @@ class PatentFiguresProcessor:
         """
         # Check for cached dataset
         dataset_path = self.processed_dir / "hf_dataset"
-        if dataset_path.exists():
-            print("Loading cached dataset from %s", dataset_path)
-            try:
-                return DatasetDict.load_from_disk(str(dataset_path))
-            except Exception as e:
-                logger.warning("Failed to load cached dataset, will reprocess: %s", e)
-                # Remove corrupted cache
-                import shutil
-                shutil.rmtree(dataset_path)
         
         # Find all bulk download folders
         bulk_folders = [d for d in self.raw_dir.iterdir() if d.is_dir()]

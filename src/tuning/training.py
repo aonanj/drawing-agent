@@ -50,7 +50,13 @@ class SDXLQLoraTrainer:
         self.noise_scheduler = None
         self.optimizer = None
         self.lr_scheduler = None
-        self.global_step = 0
+        
+        self.resume_cfg = self.config.get("resume_from_checkpoint", {})
+        if self.resume_cfg.get("enabled", False):
+            self.global_step = self.resume_cfg.get("start_step", 0)
+            print(f"Resuming training from step {self.global_step}")
+        else:
+            self.global_step = 0
 
     def setup_models(self) -> None:
         model_cfg = self.config.get("model", {})
@@ -106,6 +112,24 @@ class SDXLQLoraTrainer:
 
         self.pipeline.to(self.accelerator.device)
         ensure_dir(Path(self.config.get("output_dir", str(path_config.OUTPUTS_DIR))))
+
+        # Load adapter weights if resuming
+        if self.resume_cfg.get("enabled", False) and self.resume_cfg.get("path"):
+            adapter_path = self.resume_cfg.get("path")
+            print(f"Loading adapter weights from {adapter_path}")
+            try:
+                # The self.unet is the PEFT model, which has `load_adapter`
+                unwrapped_unet = self.accelerator.unwrap_model(self.unet)
+                adapter_name = self.resume_cfg.get("adapter_name", "default")
+                unwrapped_unet.load_adapter(adapter_path, adapter_name=adapter_name, is_trainable=True)
+                unwrapped_unet.set_adapter(adapter_name)
+
+                print("Successfully loaded adapter weights for resuming.")
+            except Exception as e:
+                print(f"Failed to load adapter weights from {adapter_path}: {e}")
+                print("Make sure the path is correct and points to the 'unet_lora' directory.")
+                raise
+        # --- END ADDITION ---
 
         del self.pipeline
         torch.cuda.empty_cache()
@@ -230,7 +254,7 @@ class SDXLQLoraTrainer:
         # Configuration
         train_batch_size = training_cfg.get("train_batch_size", 1)
         gradient_accumulation_steps = training_cfg.get("gradient_accumulation_steps", 8)
-        max_train_steps = training_cfg.get("max_train_steps", 1000)
+        max_train_steps = training_cfg.get("max_train_steps", 1200)
         checkpointing_steps = training_cfg.get("checkpointing_steps", 100)
         logging_steps = logging_cfg.get("logging_steps", 10)
         save_adapters_only = training_cfg.get("save_adapters_only", True)
@@ -301,8 +325,24 @@ class SDXLQLoraTrainer:
             self.unet, self.optimizer, train_dataloader, self.lr_scheduler
         )
 
-        # Calculate total training steps
         num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
+
+        if self.resume_cfg.get("enabled", False):
+            start_epoch = self.global_step // num_update_steps_per_epoch
+            steps_to_skip_in_first_epoch = self.global_step % num_update_steps_per_epoch
+            print(f"Resuming from Epoch {start_epoch}, Global Step {self.global_step}")
+            
+            if steps_to_skip_in_first_epoch > 0:
+                 print(f"Skipping {steps_to_skip_in_first_epoch} batches in the first epoch.")
+            
+            # Fast-forward LR scheduler to the current step
+            print(f"Fast-forwarding LR scheduler by {self.global_step} steps.")
+            for _ in range(self.global_step):
+                self.lr_scheduler.step()
+        else:
+            start_epoch = 0
+            steps_to_skip_in_first_epoch = 0
+        
         num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
         print("***** Running training *****")
@@ -315,14 +355,29 @@ class SDXLQLoraTrainer:
         # Training loop
         progress_bar = tqdm(
             range(max_train_steps),
+            initial=self.global_step,
             disable=not self.accelerator.is_local_main_process,
             desc="Training",
         )
 
-        for epoch in range(num_train_epochs):
+        for epoch in range(start_epoch, num_train_epochs):
             self.unet.train()
+            
+            # Create an iterator from the dataloader
+            dataloader_iterator = iter(train_dataloader)
+            
+            # Skip batches if resuming mid-epoch
+            if epoch == start_epoch and steps_to_skip_in_first_epoch > 0:
+                print(f"Skipping {steps_to_skip_in_first_epoch} batches for epoch {epoch}...")
+                for _ in range(steps_to_skip_in_first_epoch):
+                    try:
+                        next(dataloader_iterator)
+                    except StopIteration:
+                        # This should not happen if steps are calculated correctly
+                        logger.warning("Dataloader exhausted while skipping steps.")
+                        break
 
-            for step, batch in enumerate(train_dataloader):
+            for step, batch in enumerate(dataloader_iterator):
                 with self.accelerator.accumulate(self.unet):
                     # Encode images to latent space
                     pixel_values = batch["pixel_values"].to(

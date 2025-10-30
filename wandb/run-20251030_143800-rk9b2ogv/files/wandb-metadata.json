@@ -1,0 +1,31 @@
+{
+  "os": "Linux-6.6.105+-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.12",
+  "startedAt": "2025-10-30T14:38:00.652843Z",
+  "args": [
+    "train-model",
+    "--config",
+    "/content/drive/MyDrive/colab/drawing-agent/configs/training.sdxl-qlora.yaml"
+  ],
+  "program": "-m src.tuning.cli",
+  "git": {
+    "remote": "https://github.com/aonanj/drawing-agent.git",
+    "commit": "119c309fdfccf527d51e3fdb09cc84bb24cfc694"
+  },
+  "email": "admin@phaethon.llc",
+  "root": "/content/drive/MyDrive/colab/drawing-agent",
+  "host": "165af7748673",
+  "executable": "/usr/bin/python3",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "disk": {
+    "/": {
+      "total": "253055008768",
+      "used": "60281520128"
+    }
+  },
+  "memory": {
+    "total": "179370496000"
+  },
+  "writerId": "rxjuo000hodeac337v1b977ukgo47ig0"
+}

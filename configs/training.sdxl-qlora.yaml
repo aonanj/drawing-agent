@@ -1,8 +1,13 @@
 # QLoRA fine-tuning configuration for SDXL.
 seed: 42
 project_name: drawing-agent
-run_name: sdxl-qlora-run-2
-output_dir: outputs/sdxl-qlora-run-2
+run_name: sdxl-qlora-run-3
+output_dir: outputs/sdxl-qlora-run-3
+
+resume_from_checkpoint:
+    enabled: false
+    path: outputs/sdxl-qlora-run-
+    start_step: 0
 
 model:
   pretrained_model_name_or_path: stabilityai/stable-diffusion-xl-base-1.0
@@ -64,6 +69,6 @@ hardware:
   enable_flash_attention: false
 
 evaluation:
-  steps: 500
+  steps: 800
   num_validation_images: 8
   use_reference_images: true
