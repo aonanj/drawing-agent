@@ -58,10 +58,10 @@ class SDXLQLoraTrainer:
 
         self.pipeline = AutoPipelineForText2Image.from_pretrained(
             model_cfg.get("pretrained_model_name_or_path", "stabilityai/stable-diffusion-xl-base-1.0"),
-            d_type=torch.bfloat16,
+            torch_dtype=torch.bfloat16,
             variant="fp16",
             use_safetensors=True,
-            cache_dir=f"{os.getenv('HOME')}/.cache/huggingface",
+            cache_dir=f"{os.getenv('GOOGLE_DRIVE_PATH', '/content/drive/MyDrive/colab/drawing-agent')}/.cache/huggingface",
             force_download=False
         )
         self.unet = self.pipeline.unet
@@ -234,54 +234,56 @@ class SDXLQLoraTrainer:
             prompts = [example["prompts"] for example in examples]
             return {"pixel_values": pixel_values, "prompts": prompts}
 
-        # --- BYPASS CACHING ENTIRELY ---
-        logger.info("Processing dataset WITHOUT intermediate caching...")
-                
-        # Process dataset in small batches and collect results
+        logger.info("Creating lazy-loading dataset...")
+        
         base_train_dataset = self.dataset[data_cfg.get("train_split", "train")]
-        processed_samples = []
-        batch_size = train_batch_size
-
-        for i in tqdm(range(0, len(base_train_dataset), batch_size), desc="Processing dataset"):
-            batch_end = min(i + batch_size, len(base_train_dataset))
-            batch = base_train_dataset[i:batch_end]
-            processed_batch = self._preprocess_images(batch)
-            
-            # Convert to list of dicts
-            num_samples = len(processed_batch["pixel_values"])
-            for j in range(num_samples):
-                processed_samples.append({
-                    "pixel_values": processed_batch["pixel_values"][j],
-                    "prompts": processed_batch["prompts"][j]
-                })
-            
-            # Clear memory every 10 batches
-            if i % (batch_size * 10) == 0:
-                gc.collect()
-                torch.cuda.empty_cache()
-
-        logger.info(f"Processed {len(processed_samples)} samples without caching")
-
-        # Create proper PyTorch Dataset from processed samples
-        class ProcessedDataset(Dataset):
-            def __init__(self, samples):
-                self.samples = samples
+        
+        class LazyPreprocessDataset(Dataset):
+            """Dataset that preprocesses on-the-fly to save memory"""
+            def __init__(self, base_dataset, preprocess_fn):
+                self.base_dataset = base_dataset
+                self.preprocess_fn = preprocess_fn
+                # Cache for already processed samples (optional)
+                self._cache = {}
             
             def __len__(self):
-                return len(self.samples)
+                return len(self.base_dataset)
             
             def __getitem__(self, idx):
-                return self.samples[idx]
-
-        train_dataset = ProcessedDataset(processed_samples)
-
+                # Check cache first (optional - remove if still too much memory)
+                if idx in self._cache:
+                    return self._cache[idx]
+                
+                # Get raw sample
+                sample = self.base_dataset[idx]
+                
+                # Preprocess single sample
+                batch = {k: [v] for k, v in sample.items()}
+                processed = self.preprocess_fn(batch)
+                
+                result = {
+                    "pixel_values": processed["pixel_values"][0],
+                    "prompts": processed["prompts"][0]
+                }
+                
+                # Optionally cache (remove if memory is tight)
+                # self._cache[idx] = result
+                
+                return result
+        
+        train_dataset = LazyPreprocessDataset(base_train_dataset, self._preprocess_images)
+        
+        # Create DataLoader
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=train_batch_size,
             shuffle=True,
             collate_fn=collate_fn,
-            num_workers=0,  # Set to 0 for debugging, increase for performance
+            num_workers=0,  # Keep at 0 for Colab
+            pin_memory=True if torch.cuda.is_available() else False,
         )
+                
+
         
         self._setup_optimizer()
 

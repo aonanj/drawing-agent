@@ -8,7 +8,7 @@ def get_basedir():
     If the GOOGLE_DRIVE_PATH environment variable is set, it will be used as the base directory.
     Otherwise, the current working directory will be used.
     """
-    return Path(os.environ.get("GOOGLE_DRIVE_PATH", "."))
+    return Path(os.environ.get("GOOGLE_DRIVE_PATH", "/content/drive/MyDrive/colab/drawing-agent"))
 
 BASE_DIR = get_basedir()
 CONFIG_DIR = BASE_DIR / "configs"
