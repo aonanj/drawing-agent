@@ -13,7 +13,7 @@ from datasets import DatasetDict
 from diffusers.pipelines.auto_pipeline import AutoPipelineForText2Image
 from diffusers.optimization import get_scheduler
 import gc
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
@@ -76,10 +76,19 @@ class SDXLQLoraTrainer:
             encoder.requires_grad_(False)
 
         qlora_cfg = self.config.get("qlora", {})
+        
+        target_modules_config = qlora_cfg.get("target_modules", ["to_k", "to_q"])
+        if isinstance(target_modules_config, DictConfig):
+            target_modules_list = list(target_modules_config.values())
+        elif isinstance(target_modules_config, ListConfig):
+            target_modules_list = list(target_modules_config)
+        else:
+            target_modules_list = list(target_modules_config)
+
         lora_config = LoraConfig(
             r=qlora_cfg.get("r", 32),
             lora_alpha=qlora_cfg.get("alpha", 16),
-            target_modules=qlora_cfg.get("target_modules", ["to_k", "to_q"]),
+            target_modules=target_modules_list,  # Use the converted list here
             lora_dropout=qlora_cfg.get("dropout", 0.05),
             bias="none",
         )
