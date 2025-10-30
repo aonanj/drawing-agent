@@ -18,7 +18,6 @@ docs/
 .ipynb_checkpoints/
 
 # Accelerate/W&B
-wandb/
 logs/
 
 # OS
