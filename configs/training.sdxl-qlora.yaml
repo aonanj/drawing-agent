@@ -1,8 +1,8 @@
 # QLoRA fine-tuning configuration for SDXL.
 seed: 42
 project_name: drawing-agent
-run_name: sdxl-qlora-prototype
-output_dir: outputs/sdxl-qlora
+run_name: sdxl-qlora-run-2
+output_dir: outputs/sdxl-qlora-run-2
 
 model:
   pretrained_model_name_or_path: stabilityai/stable-diffusion-xl-base-1.0
@@ -27,8 +27,9 @@ training:
   resolution: 1024
   train_batch_size: 1
   gradient_accumulation_steps: 8
-  max_train_steps: 1000
-  checkpointing_steps: 100
+  # max_train_steps: 1000
+  num_train_epochs: 3
+  checkpointing_steps: 500
   save_adapters_only: true
   mixed_precision: bf16
   gradient_checkpointing: true
@@ -63,6 +64,6 @@ hardware:
   enable_flash_attention: false
 
 evaluation:
-  steps: 200
+  steps: 500
   num_validation_images: 8
   use_reference_images: true

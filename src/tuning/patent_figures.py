@@ -78,7 +78,7 @@ class PatentFiguresProcessor:
         # Check for cached dataset
         dataset_path = self.processed_dir / "hf_dataset"
         if dataset_path.exists():
-            logger.info("Loading cached dataset from %s", dataset_path)
+            print("Loading cached dataset from %s", dataset_path)
             try:
                 return DatasetDict.load_from_disk(str(dataset_path))
             except Exception as e:
@@ -89,7 +89,7 @@ class PatentFiguresProcessor:
         
         # Find all bulk download folders
         bulk_folders = [d for d in self.raw_dir.iterdir() if d.is_dir()]
-        logger.info("Found %d bulk download folders", len(bulk_folders))
+        print("Found %d bulk download folders", len(bulk_folders))
         
         if not bulk_folders:
             raise ValueError(
@@ -102,9 +102,9 @@ class PatentFiguresProcessor:
         for bulk_folder in tqdm(bulk_folders, desc="Processing bulk downloads"):
             samples = self._process_bulk_folder(bulk_folder)
             all_samples.extend(samples)
-            logger.info("Processed %s: %d samples", bulk_folder.name, len(samples))
+            print("Processed %s: %d samples", bulk_folder.name, len(samples))
         
-        logger.info("Processed %d total samples", len(all_samples))
+        print("Processed %d total samples", len(all_samples))
         
         if not all_samples:
             raise ValueError(
@@ -119,13 +119,13 @@ class PatentFiguresProcessor:
         for sample in all_samples:
             self.family_samples[sample.family_id].append(sample)
         
-        logger.info("Found %d unique patent families", len(self.family_samples))
+        print("Found %d unique patent families", len(self.family_samples))
         
         # Create family-based splits
         dataset_dict = self._create_splits(all_samples)
         
         # Save dataset
-        logger.info("Saving dataset to %s", dataset_path)
+        print("Saving dataset to %s", dataset_path)
         # Work around HF datasets bug when saving empty splits by forcing a single shard
         empty_split_shards = {
             str(split): 1 for split, split_dataset in dataset_dict.items() if len(split_dataset) == 0
@@ -445,7 +445,7 @@ class PatentFiguresProcessor:
             else:
                 test_samples_raw.append(sample)
         
-        logger.info(
+        print(
             "Split sizes: %d train, %d val, %d test samples",
             len(train_samples_raw), len(val_samples_raw), len(test_samples_raw)
         )
@@ -529,7 +529,7 @@ class PatentFiguresProcessor:
         with summary_path.open("w") as f:
             json.dump(summary, f, indent=2)
         
-        logger.info("Saved dataset summary to %s", summary_path)
+        print("Saved dataset summary to %s", summary_path)
 
 
 def process_uspto_data(config_path: Path) -> DatasetDict:

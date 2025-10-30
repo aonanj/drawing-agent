@@ -54,7 +54,7 @@ class SDXLQLoraTrainer:
 
     def setup_models(self) -> None:
         model_cfg = self.config.get("model", {})
-        logger.info("Loading SDXL pipeline from %s", model_cfg.get("pretrained_model_name_or_path"))
+        print("Loading SDXL pipeline from %s", model_cfg.get("pretrained_model_name_or_path"))
 
         self.pipeline = AutoPipelineForText2Image.from_pretrained(
             model_cfg.get("pretrained_model_name_or_path", "stabilityai/stable-diffusion-xl-base-1.0"),
@@ -92,7 +92,7 @@ class SDXLQLoraTrainer:
             lora_dropout=qlora_cfg.get("dropout", 0.05),
             bias="none",
         )
-        logger.info("Applying QLoRA adapters with rank %s", lora_config.r)
+        print("Applying QLoRA adapters with rank %s", lora_config.r)
         self.unet = get_peft_model(self.unet, lora_config)
         self.pipeline.unet = self.unet
 
@@ -243,7 +243,7 @@ class SDXLQLoraTrainer:
             prompts = [example["prompts"] for example in examples]
             return {"pixel_values": pixel_values, "prompts": prompts}
 
-        logger.info("Creating lazy-loading dataset...")
+        print("Creating lazy-loading dataset...")
         
         base_train_dataset = self.dataset[data_cfg.get("train_split", "train")]
         
@@ -306,11 +306,11 @@ class SDXLQLoraTrainer:
         num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
         print("***** Running training *****")
-        logger.info(f"  Num examples = {len(train_dataset)}")
-        logger.info(f"  Num Epochs = {num_train_epochs}")
-        logger.info(f"  Batch size per device = {train_batch_size}")
-        logger.info(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
-        logger.info(f"  Total optimization steps = {max_train_steps}")
+        print(f"  Num examples = {len(train_dataset)}")
+        print(f"  Num Epochs = {num_train_epochs}")
+        print(f"  Batch size per device = {train_batch_size}")
+        print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
+        print(f"  Total optimization steps = {max_train_steps}")
 
         # Training loop
         progress_bar = tqdm(
@@ -450,7 +450,7 @@ class SDXLQLoraTrainer:
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
             self._save_checkpoint(save_adapters_only, is_final=True)
-            logger.info("Training completed!")
+            print("Training completed!")
 
     def _get_add_time_ids(
         self,
@@ -479,7 +479,7 @@ class SDXLQLoraTrainer:
             # Save only LoRA adapters
             unwrapped_unet = self.accelerator.unwrap_model(self.unet)
             unwrapped_unet.save_pretrained(save_path / "unet_lora")
-            logger.info(f"Saved LoRA adapters to {save_path}")
+            print(f"Saved LoRA adapters to {save_path}")
         else:
             # Save full pipeline
             if self.pipeline is None:
@@ -487,7 +487,7 @@ class SDXLQLoraTrainer:
             unwrapped_unet = self.accelerator.unwrap_model(self.unet)
             self.pipeline.unet = unwrapped_unet
             self.pipeline.save_pretrained(save_path)
-            logger.info(f"Saved full pipeline to {save_path}")
+            print(f"Saved full pipeline to {save_path}")
 
     def finalize(self) -> None:
         if self.accelerator.is_main_process:
@@ -504,10 +504,10 @@ def train(config_path: Path) -> None:
     dataset_dir = processed_dir if processed_dir.exists() else processed_dir / "hf_dataset"
 
     if dataset_dir.exists():
-        logger.info("Loading pre-processed dataset from %s", dataset_dir)
+        print("Loading pre-processed dataset from %s", dataset_dir)
         dataset = DatasetDict.load_from_disk(str(dataset_dir))
     else:
-        logger.info("Building dataset from raw data using config %s", dataset_cfg_path)
+        print("Building dataset from raw data using config %s", dataset_cfg_path)
         dataset = load_dataset_dict(dataset_cfg_path)
 
     trainer = SDXLQLoraTrainer(config, dataset)
