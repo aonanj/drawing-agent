@@ -5,10 +5,11 @@ import math
 from pathlib import Path
 from typing import Any
 
+import os
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
-from datasets import concatenate_datasets, DatasetDict, Dataset as HFDataset
+from datasets import DatasetDict
 from diffusers.pipelines.auto_pipeline import AutoPipelineForText2Image
 from diffusers.optimization import get_scheduler
 import gc
@@ -55,23 +56,13 @@ class SDXLQLoraTrainer:
         model_cfg = self.config.get("model", {})
         logger.info("Loading SDXL pipeline from %s", model_cfg.get("pretrained_model_name_or_path"))
 
-        # Map config dtype strings to torch dtype attributes
-        dtype_map = {
-            "bf16": torch.bfloat16,
-            "bfloat16": torch.bfloat16,
-            "fp16": torch.float16,
-            "float16": torch.float16,
-            "fp32": torch.float32,
-            "float32": torch.float32,
-        }
-        dtype_str = self.config.get("qlora", {}).get("compute_dtype", "bf16")
-        torch_dtype = dtype_map.get(dtype_str, torch.bfloat16)
         self.pipeline = AutoPipelineForText2Image.from_pretrained(
             model_cfg.get("pretrained_model_name_or_path", "stabilityai/stable-diffusion-xl-base-1.0"),
-            torch_dtype=torch_dtype,
-            variant=model_cfg.get("variant", "fp16"),
+            d_type=torch.bfloat16,
+            variant="fp16",
             use_safetensors=True,
-            cache_dir=model_cfg.get("cache_dir"),  # <--- THIS IS THE FIX
+            cache_dir=f"{os.getenv('HOME')}/.cache/huggingface",
+            force_download=False
         )
         self.unet = self.pipeline.unet
         self.text_encoders = [self.pipeline.text_encoder, self.pipeline.text_encoder_2]
@@ -106,6 +97,9 @@ class SDXLQLoraTrainer:
 
         self.pipeline.to(self.accelerator.device)
         ensure_dir(Path(self.config.get("output_dir", str(path_config.OUTPUTS_DIR))))
+
+        del self.pipeline
+        torch.cuda.empty_cache()
 
     def _preprocess_images(self, examples: dict[str, Any]) -> dict[str, Any]:
         """Preprocess images and prompts for training."""
@@ -240,84 +234,55 @@ class SDXLQLoraTrainer:
             prompts = [example["prompts"] for example in examples]
             return {"pixel_values": pixel_values, "prompts": prompts}
 
-        # Prepare dataset
+        # --- BYPASS CACHING ENTIRELY ---
+        logger.info("Processing dataset WITHOUT intermediate caching...")
+                
+        # Process dataset in small batches and collect results
         base_train_dataset = self.dataset[data_cfg.get("train_split", "train")]
-        
-        # --- SHARDING & GARBAGE COLLECTION FIX ---
-        num_shards = 10  # Increased to 10 for smaller, safer chunks
-        processed_shard_paths = []
-        
-        model_cache_dir = Path(self.config.get("model", {}).get("cache_dir", ".cache/huggingface"))
-        dataset_map_cache_dir = model_cache_dir / "datasets_cache"
-        ensure_dir(dataset_map_cache_dir)
-        
-        logger.info(f"Mapping dataset in {num_shards} shards to force garbage collection...")
-        
-        for i in range(num_shards):
-            logger.info(f"--- Processing Shard {i+1} of {num_shards} ---")
+        processed_samples = []
+        batch_size = train_batch_size
+
+        for i in tqdm(range(0, len(base_train_dataset), batch_size), desc="Processing dataset"):
+            batch_end = min(i + batch_size, len(base_train_dataset))
+            batch = base_train_dataset[i:batch_end]
+            processed_batch = self._preprocess_images(batch)
             
-            # Get one shard
-            shard = base_train_dataset.shard(num_shards=num_shards, index=i, contiguous=True)
+            # Convert to list of dicts
+            num_samples = len(processed_batch["pixel_values"])
+            for j in range(num_samples):
+                processed_samples.append({
+                    "pixel_values": processed_batch["pixel_values"][j],
+                    "prompts": processed_batch["prompts"][j]
+                })
             
-            # Define a unique cache file FOR THIS SHARD on Google Drive
-            shard_cache_file = dataset_map_cache_dir / f"train_map_shard_{i}_of_{num_shards}.arrow"
-            processed_shard_paths.append(str(shard_cache_file))
-            
-            # Map just this one shard, writing to its own cache file
-            processed_shard = shard.map(
-                self._preprocess_images,
-                batched=True,
-                batch_size=train_batch_size,
-                remove_columns=base_train_dataset.column_names,
-                cache_file_name=str(shard_cache_file),
-            )
-            
-            # --- This is the new, critical part ---
-            logger.info(f"Shard {i+1} mapped. Deleting objects to free VM disk space.")
-            del shard
-            del processed_shard
-            gc.collect()
-            logger.info(f"--- Shard {i+1} complete and memory freed. ---")
+            # Clear memory every 10 batches
+            if i % (batch_size * 10) == 0:
+                gc.collect()
+                torch.cuda.empty_cache()
 
-        logger.info("All shards mapped. Reloading from cache files on Google Drive...")
-        
-        # Reload all the processed shards from their cache files
-        processed_shards = [
-            HFDataset.from_file(path) for path in processed_shard_paths
-        ]
-        
-        train_dataset = concatenate_datasets(processed_shards)
-        logger.info("All shards concatenated into final training set.")
-        # --- END SHARDING & GARBAGE COLLECTION FIX ---
+        logger.info(f"Processed {len(processed_samples)} samples without caching")
 
-        # Create data loader with custom collation
-
-        # Create data loader with custom collation
-
-        train_dataset.set_format(type="torch")
-
-        # Wrap in a PyTorch Dataset for type compatibility
-        class HFDatasetWrapper(Dataset):
-            def __init__(self, hf_dataset):
-                self.hf_dataset = hf_dataset
+        # Create proper PyTorch Dataset from processed samples
+        class ProcessedDataset(Dataset):
+            def __init__(self, samples):
+                self.samples = samples
             
             def __len__(self):
-                return len(self.hf_dataset)
+                return len(self.samples)
             
             def __getitem__(self, idx):
-                return self.hf_dataset[idx]
+                return self.samples[idx]
 
-        wrapped_dataset = HFDatasetWrapper(train_dataset)
+        train_dataset = ProcessedDataset(processed_samples)
 
         train_dataloader = DataLoader(
-            wrapped_dataset,
+            train_dataset,
             batch_size=train_batch_size,
             shuffle=True,
             collate_fn=collate_fn,
             num_workers=0,  # Set to 0 for debugging, increase for performance
         )
-
-        # Set up optimizer
+        
         self._setup_optimizer()
 
         # Prepare for distributed training
@@ -329,7 +294,7 @@ class SDXLQLoraTrainer:
         num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
         num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
-        logger.info("***** Running training *****")
+        print("***** Running training *****")
         logger.info(f"  Num examples = {len(train_dataset)}")
         logger.info(f"  Num Epochs = {num_train_epochs}")
         logger.info(f"  Batch size per device = {train_batch_size}")
@@ -440,6 +405,32 @@ class SDXLQLoraTrainer:
                     # Stop if we've reached max steps
                     if self.global_step >= max_train_steps:
                         break
+
+                    def log_disk_usage(step):
+                        """Log disk usage every N steps"""
+                        import shutil
+                        
+                        vm_usage = shutil.disk_usage('/content')
+                        vm_pct = (vm_usage.used / vm_usage.total) * 100
+                        
+                        drive_usage = shutil.disk_usage('/content/drive/MyDrive')
+                        drive_pct = (drive_usage.used / drive_usage.total) * 100
+                        
+                        print(
+                            f"Step {step} - VM: {vm_usage.used/(1024**3):.1f}GB/{vm_usage.total/(1024**3):.1f}GB ({vm_pct:.1f}%) | "
+                            f"Drive: {drive_usage.used/(1024**3):.1f}GB/{drive_usage.total/(1024**3):.1f}GB ({drive_pct:.1f}%)"
+                        )
+                        
+                        # Auto-clear if VM over 80%
+                        if vm_pct > 80:
+                            logger.warning("VM disk over 80%, clearing caches...")
+                            os.system("rm -rf /root/.cache/huggingface/hub/models--*/blobs/tmp* 2>/dev/null")
+                            torch.cuda.empty_cache()
+                            gc.collect()
+
+                    # Add to training loop (around line 300)
+                    if self.global_step % logging_steps == 0:
+                        log_disk_usage(self.global_step)
 
             if self.global_step >= max_train_steps:
                 break
