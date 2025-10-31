@@ -254,7 +254,7 @@ class SDXLQLoraTrainer:
         # Configuration
         train_batch_size = training_cfg.get("train_batch_size", 1)
         gradient_accumulation_steps = training_cfg.get("gradient_accumulation_steps", 8)
-        max_train_steps = training_cfg.get("max_train_steps", 1200)
+        num_train_epochs = int(training_cfg.get("num_train_epochs", 3))
         checkpointing_steps = training_cfg.get("checkpointing_steps", 100)
         logging_steps = logging_cfg.get("logging_steps", 10)
         save_adapters_only = training_cfg.get("save_adapters_only", True)
@@ -316,7 +316,11 @@ class SDXLQLoraTrainer:
             pin_memory=True if torch.cuda.is_available() else False,
         )
                 
-
+        num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
+        max_train_steps = num_train_epochs * num_update_steps_per_epoch
+        
+        # Overwrite config value so optimizer and resume logic use the calculated steps
+        training_cfg["max_train_steps"] = max_train_steps
         
         self._setup_optimizer()
 
@@ -325,7 +329,6 @@ class SDXLQLoraTrainer:
             self.unet, self.optimizer, train_dataloader, self.lr_scheduler
         )
 
-        num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
 
         if self.resume_cfg.get("enabled", False):
             start_epoch = self.global_step // num_update_steps_per_epoch
@@ -342,8 +345,6 @@ class SDXLQLoraTrainer:
         else:
             start_epoch = 0
             steps_to_skip_in_first_epoch = 0
-        
-        num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
         print("***** Running training *****")
         print(f"  Num examples = {len(train_dataset)}")
