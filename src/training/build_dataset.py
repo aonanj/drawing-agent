@@ -12,6 +12,18 @@ Each output row (JSONL) corresponds to ONE figure crop:
   "doc_id": "US1234567",
   "sha256": "...",
   "bbox": [x1,y1,x2,y2],
+  "bbox_initial": [x1a,y1a,x2a,y2a],
+  "original_size": [width,height],
+  "resize_meta": {
+      "orig_width": ...,
+      "orig_height": ...,
+      "resized_width": ...,
+      "resized_height": ...,
+      "offset_x": ...,
+      "offset_y": ...,
+      "scale": ...,
+      "canvas_size": ...
+  },
   "fig_label": "FIG. 3A",
   "tiff_source": "data/work/tiff/US1234567_page123.tif",
   "label_in_xml": true | false
@@ -24,7 +36,7 @@ Assumptions:
 - `control.py` defines: canny_map(png_in, png_out).
 
 Usage:
-  python scripts/build_dataset.py \
+  python src/training/build_dataset.py \
     --index data/work/index.sqlite \
     --out_dir data/work \
     --jsonl_out data/ds/train.jsonl \
@@ -41,7 +53,7 @@ from typing import Dict, Iterable
 
 # Local modules
 from parse_xml import parse_doc
-from img_norm import load_tiff, deskew, binarize, split_figures, pad_square
+from img_norm import load_tiff, deskew, binarize, split_figures, pad_square, expand_bbox
 from control import canny_map
 from prompt import build_prompt
 
@@ -73,6 +85,71 @@ def sanitize(s: str) -> str:
             pass
     out = "".join(keep).strip("_")
     return out or "UNLABELED"
+
+
+def canonical_fig_num(num: str | None) -> str:
+    """
+    Normalize figure identifiers to a canonical form:
+      - uppercase
+      - collapse internal spaces
+      - trim leading zeros on the numeric part (preserving a single zero)
+      - allow a single hyphen to denote ranges (e.g., 3-4)
+    Returns an empty string if the token is invalid.
+    """
+    if not num:
+        return ""
+    raw = num.strip().upper().replace(" ", "")
+    if not raw:
+        return ""
+    parts = raw.split("-")
+    if len(parts) > 2:
+        return ""
+    normalized_parts = []
+    for part in parts:
+        if not part:
+            return ""
+        digits = []
+        suffix = []
+        in_suffix = False
+        for ch in part:
+            if ch.isdigit() and not in_suffix:
+                digits.append(ch)
+                continue
+            if ch.isalpha():
+                in_suffix = True
+                suffix.append(ch)
+                continue
+            return ""
+        if not digits:
+            return ""
+        num_part = "".join(digits).lstrip("0") or "0"
+        if len(num_part) > 4 or len(suffix) > 2:
+            return ""
+        normalized_parts.append(num_part + "".join(suffix))
+    return "-".join(normalized_parts)
+
+
+def extract_fig_num(label: str | None) -> str | None:
+    """
+    Extract a canonical figure identifier (e.g., '3A') from OCR-provided labels like 'FIG. 3A'.
+    Returns None if a valid figure number cannot be located.
+    """
+    if not label:
+        return None
+    upper = label.upper()
+    for marker in ("FIGURE", "FIG"):
+        if marker in upper:
+            suffix = upper.split(marker, 1)[1]
+            break
+    else:
+        return None
+    suffix = suffix.replace(".", " ").replace(":", " ").replace("/", " ")
+    suffix = suffix.strip(" .:_-")
+    if not suffix:
+        return None
+    suffix = suffix.replace(" ", "")
+    canon = canonical_fig_num(suffix)
+    return canon or None
 
 
 # ------------ Core builders ------------
@@ -116,7 +193,14 @@ def process_tiff(
     # Prepare shared text block for prompts
     meta = parse_doc(str(xml_path))
     fig_text = _choose_fig_text(meta)
-    fig_nums_xml_set = {s.upper() for s in (fig_nums_from_xml or [])} or set(meta.get("figure_nums", []))
+    fig_nums_xml_set: set[str] = set()
+    fig_nums_source = fig_nums_from_xml or meta.get("figure_nums", []) or []
+    for raw_num in fig_nums_source:
+        canon = canonical_fig_num(raw_num)
+        if canon:
+            fig_nums_xml_set.add(canon)
+    if not fig_nums_xml_set:
+        return 0
 
     written = 0
     base = f"{doc_id}_{Path(tiff_path).stem}"
@@ -124,12 +208,23 @@ def process_tiff(
     ensure_dir(out_img_dir)
     ensure_dir(out_ctrl_dir)
 
-    for idx, (crop, fig_label, bbox) in enumerate(tiles, 1):
-        # Resize to square canvas
-        crop = pad_square(crop, size=target_size)
+    for idx, (_, fig_label, bbox) in enumerate(tiles, 1):
+        fig_num = extract_fig_num(fig_label)
+        if not fig_num:
+            continue
+        if fig_num not in fig_nums_xml_set:
+            continue
+        # Expand bbox to include full inked content before cropping
+        x1, y1, x2, y2 = expand_bbox(img, bbox)
+        raw_crop = img[y1:y2, x1:x2]
+        if raw_crop.size == 0:
+            continue
+
+        # Resize to square canvas without losing aspect ratio
+        crop, resize_meta = pad_square(raw_crop, size=target_size, return_meta=True)
 
         # Name with OCR label if present
-        label_token = sanitize((fig_label or f"FIG_{idx}").upper().replace("FIGURE", "FIG"))
+        label_token = sanitize(f"FIG_{fig_num}")
         img_name = f"{base}_{label_token}.png"
         ctrl_name = f"{base}_{label_token}_canny.png"
 
@@ -147,12 +242,7 @@ def process_tiff(
         prompt = build_prompt(fig_text, claims_subset=claims_text[:500], fig_label=fig_label)
 
         # Label↔XML consistency flag
-        match_xml = False
-        if fig_label:
-            # Accept "FIG. 3A" -> "3A"
-            num = fig_label.upper().replace("FIGURE", "FIG").replace("FIG.", "FIG").replace("FIG ", "FIG")
-            num = num.replace("FIG", "").strip()
-            match_xml = num in fig_nums_xml_set if num else False
+        match_xml = fig_num in fig_nums_xml_set
 
         row = {
             "id": f"{doc_id}:{img_name}",
@@ -162,7 +252,10 @@ def process_tiff(
             "source_xml": str(xml_path),
             "doc_id": doc_id,
             "sha256": sha256_file(img_out),
-            "bbox": [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])],
+            "bbox": [int(x1), int(y1), int(x2), int(y2)],
+            "bbox_initial": [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])],
+            "original_size": [int(raw_crop.shape[1]), int(raw_crop.shape[0])],  # width, height
+            "resize_meta": resize_meta,
             "fig_label": fig_label,
             "tiff_source": str(tiff_path),
             "label_in_xml": bool(match_xml),
@@ -209,6 +302,9 @@ def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
             for tiff in tiffs:
                 tiff_path = Path(tiff)
                 if not tiff_path.exists():
+                    continue
+                name_upper = tiff_path.name.upper()
+                if name_upper.endswith("D00000.TIF") or name_upper.endswith("D00000.TIFF"):
                     continue
                 total_pages += 1
 

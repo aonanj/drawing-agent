@@ -124,6 +124,7 @@ Each training sample includes:
   Prohibitions: no shading, no color, no text outside labels
   ```
 - **Metadata**: Patent ID, CPC codes, family ID, claims, abstract
+- **Resize Metadata**: Original crop size, expanded bounding box, and scale/offset details for reversing the 1024×1024 letterbox normalization
 
 ## ➣ Configuration
 
