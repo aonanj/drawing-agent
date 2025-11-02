@@ -112,7 +112,7 @@ python -m src.tuning.cli info
 ## ➣ Dataset Structure
 
 Each training sample includes:
-- **Target Image**: Processed patent figure (1024×1024, monochrome)
+- **Target Image**: Processed patent figure (2048x2048, monochrome)
 - **Control Map**: Canny edge detection for ControlNet
 - **Structured Prompt**:
   ```
@@ -124,7 +124,7 @@ Each training sample includes:
   Prohibitions: no shading, no color, no text outside labels
   ```
 - **Metadata**: Patent ID, CPC codes, family ID, claims, abstract
-- **Resize Metadata**: Original crop size, expanded bounding box, and scale/offset details for reversing the 1024×1024 letterbox normalization
+- **Resize Metadata**: Original crop size, expanded bounding box, and scale/offset details for reversing the 2048x2048 letterbox normalization
 
 ## ➣ Configuration
 
@@ -137,7 +137,7 @@ storage:
   cache_dir: data/figures/cache
 
 image:
-  size: 1024                     # Target image dimensions
+  size: 2048                     # Target image dimensions
   min_gap: 40                    # Gap detection threshold
   gap_threshold: 0.005
 
@@ -203,7 +203,7 @@ training:
 - **Denoising**: Morphological operations + connected components
 - **Multi-figure splitting**: Detects horizontal gaps between figures
 - **Smart cropping**: Content-aware boundary detection
-- **Padding & resizing**: 1024×1024 with white background
+- **Padding & resizing**: 2048x2048 with white background
 
 ### Control Maps
 - Canny edge detection (100/200 thresholds)

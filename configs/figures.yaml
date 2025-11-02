@@ -6,7 +6,7 @@ storage:
   cache_dir: data/figures/cache
 
 image:
-  size: 1024
+  size: 2048
   min_gap: 40
   gap_threshold: 0.005
 

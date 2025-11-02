@@ -1,0 +1,27 @@
+-- data/work/index.sqlite
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+PRAGMA foreign_keys=ON;
+
+CREATE TABLE IF NOT EXISTS docs (
+  doc_id TEXT PRIMARY KEY,
+  xml     TEXT NOT NULL,          -- absolute or project-relative path
+  tiffs   TEXT NOT NULL           -- JSON array of TIFF paths
+);
+
+CREATE TABLE IF NOT EXISTS figures (
+  id        TEXT PRIMARY KEY,     -- e.g., {doc_id}:{page}:{fig_label}
+  doc_id    TEXT NOT NULL,
+  tiff_path TEXT NOT NULL,
+  fig_label TEXT,                 -- e.g., "FIG. 3A"
+  bbox_x1   INTEGER, bbox_y1 INTEGER, bbox_x2 INTEGER, bbox_y2 INTEGER,
+  FOREIGN KEY(doc_id) REFERENCES docs(doc_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_docs_xml ON docs(xml);
+CREATE INDEX IF NOT EXISTS idx_fig_doc ON figures(doc_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS text_fts USING fts5(
+  doc_id UNINDEXED, section, content, tokenize='porter'
+);
+-- section ∈ {'caption','paragraph','claim'}

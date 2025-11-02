@@ -172,7 +172,7 @@ def process_tiff(
     jsonl_file,
     claims_text: str,
     fig_nums_from_xml: Iterable[str],
-    target_size: int = 1024,
+    target_size: int = 2048,
 ) -> int:
     """
     Split a TIFF page into figure crops, save PNGs + control maps, and emit JSONL rows.
@@ -317,7 +317,7 @@ def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
                     jsonl_file=jf,
                     claims_text=claims_text,
                     fig_nums_from_xml=fig_nums_from_xml,
-                    target_size=1024,
+                    target_size=2048,
                 )
                 total_figs += figs
 

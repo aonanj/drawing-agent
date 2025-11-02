@@ -32,6 +32,60 @@ _REL_PHRASES = [
 ]
 _REL_RX = re.compile("|".join(rf"\b{p}\b" for p in _REL_PHRASES), re.I)
 
+_REL_VARIANTS = [
+    ("connected to", r"\bconnect(?:ed|s|ing)?\s+(?:to|with)\b"),
+    ("coupled to", r"\bcoupl(?:ed|es|ing)?\s+(?:to|with)\b"),
+    ("attached to", r"\battach(?:ed|es|ing)?\s+(?:to|with|on)\b"),
+    ("mounted to", r"\bmount(?:ed|s|ing)?\s+(?:to|on|over|above)\b"),
+    ("joined to", r"\bjoin(?:ed|s|ing)?\s+(?:to|with)\b"),
+    ("in communication with", r"\bin\s+communication\s+(?:with|to)\b"),
+    ("fluidly connected to", r"\bfluid(?:ly)?\s+connect(?:ed|s|ing)?\s+(?:to|with)\b"),
+    ("electrically connected to", r"\belectrical(?:ly)?\s+connect(?:ed|s|ing)?\s+(?:to|with)\b"),
+    ("between", r"\bbetween\b"),
+    ("within", r"\bwithin\b"),
+    ("inside", r"\binside\b"),
+    ("outside", r"\boutside\b"),
+    ("adjacent to", r"\badjacent\s+(?:to|with)\b"),
+    ("above", r"\babove\b"),
+    ("below", r"\bbelow\b"),
+]
+_REL_VARIANT_RX = [(label, re.compile(pat, re.I)) for label, pat in _REL_VARIANTS]
+
+_TOKEN_RX = re.compile(r"[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*")
+_REL_STOPWORDS = {
+    "the","a","an","and","or","of","to","with","in","on","at","by","for",
+    "is","are","was","were","be","been","being","that","this","these","those",
+}
+_REL_BOUNDARY_TOKENS = {
+    "connect","connected","connection","connections","connecting","couple","coupled","couples","coupling",
+    "attach","attached","attaches","attaching","mount","mounted","mounting","mounts",
+    "join","joined","joining","joins","communication","communicate","communicating",
+    "fluidly","electrically","between","within","inside","outside","adjacent","above","below",
+}
+
+def _trim_relation_tokens(tokens, *, tail: bool, limit: int = 4):
+    tokens = list(tokens)
+    if tail:
+        while tokens and tokens[-1].lower() in _REL_STOPWORDS:
+            tokens.pop()
+        result = tokens[-limit:]
+    else:
+        while tokens and tokens[0].lower() in _REL_STOPWORDS:
+            tokens.pop(0)
+        result = tokens[:limit]
+    if not tail:
+        pruned = []
+        for tok in result:
+            if tok.lower() in _REL_BOUNDARY_TOKENS:
+                break
+            pruned.append(tok)
+        result = pruned
+    while result and result[0].lower() in _REL_STOPWORDS:
+        result = result[1:]
+    while result and result[-1].lower() in _REL_STOPWORDS:
+        result = result[:-1]
+    return result
+
 # Tokenization and cleanup
 _WS_RX = re.compile(r"\s+")
 _WORD_RX = re.compile(r"[A-Za-z][A-Za-z\-]+")
@@ -64,17 +118,56 @@ def _top_k_words(text: str, k=14):
     return ", ".join(w for w,_ in counts.most_common(k))
 
 def _extract_relations(text: str, limit=4):
-    rels = _REL_RX.findall(text or "")
-    # unique preserve order
+    if not text:
+        return "unspecified"
+
+    sentences = re.split(r"(?<=[.;:])\s+|\n+", text)
     seen, out = set(), []
-    for r in rels:
-        r = r.lower()
-        if r not in seen:
-            seen.add(r)
-            out.append(r)
+
+    def _add_relation(snippet: str):
+        key = snippet.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(snippet)
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        for label, rx in _REL_VARIANT_RX:
+            for match in rx.finditer(sentence):
+                left_tokens = _TOKEN_RX.findall(sentence[: match.start()])
+                right_tokens = _TOKEN_RX.findall(sentence[match.end():])
+                left = " ".join(_trim_relation_tokens(left_tokens, tail=True))
+                right = " ".join(_trim_relation_tokens(right_tokens, tail=False))
+                if left and right:
+                    snippet = f"{left} {label} {right}"
+                elif left:
+                    snippet = f"{left} {label}"
+                elif right:
+                    snippet = f"{label} {right}"
+                else:
+                    snippet = label
+                snippet = _clean(snippet)
+                if snippet:
+                    _add_relation(snippet)
+                    if len(out) >= limit:
+                        return ", ".join(out)
         if len(out) >= limit:
             break
-    return ", ".join(out) if out else "unspecified"
+
+    if out:
+        return ", ".join(out[:limit])
+
+    # Fallback to basic phrase detection if contextual extraction failed
+    rels = _REL_RX.findall(text)
+    for r in rels:
+        snippet = _clean(r.lower())
+        if snippet:
+            _add_relation(snippet)
+        if len(out) >= limit:
+            break
+    return ", ".join(out[:limit]) if out else "unspecified"
 
 def _extract_labels(text: str, limit=12):
     nums = []
@@ -129,10 +222,9 @@ def build_prompt(fig_text: str, claims_subset: str|None = None, fig_label: str|N
 
     if claims_subset:
         # Add only visualizable constraints: short, trimmed, de-duplicated numerals retained
-        claims_cue = _trim(claims_subset, 320)
+        claims_cue = _trim(claims_subset, 1000)
         claim_labels = _extract_labels(claims_cue, limit=12)
         prompt += f" Constraints: {claims_cue}"
         if claim_labels != "if present":
             prompt += f" Claim labels: {claim_labels}"
     return prompt
-

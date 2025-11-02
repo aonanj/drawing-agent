@@ -34,7 +34,7 @@ tokenization:
   padding: true
 
 image_processing:
-  resolution: 1024
+  resolution: 2048
   center_crop: true
   random_flip: false
   num_images_per_prompt: 1

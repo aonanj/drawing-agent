@@ -144,6 +144,6 @@ training:
         gradient_checkpointing: true
         mixed_precision: bf16
         num_train_epochs: 3
-        resolution: 1024
+        resolution: 2048
         save_adapters_only: true
         train_batch_size: 1

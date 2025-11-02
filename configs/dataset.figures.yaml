@@ -36,6 +36,6 @@ columns:
   control_column: control
 
 image_processing:
-  resolution: 1024
+  resolution: 2048
   center_crop: true
   random_flip: false

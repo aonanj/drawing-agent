@@ -140,6 +140,6 @@ training:
         gradient_checkpointing: true
         max_train_steps: 1000
         mixed_precision: bf16
-        resolution: 1024
+        resolution: 2048
         save_adapters_only: true
         train_batch_size: 1

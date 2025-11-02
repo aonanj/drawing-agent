@@ -4,6 +4,7 @@ import re
 import cv2
 import numpy as np
 from pathlib import Path
+from typing import Dict, Tuple, Union, Literal, overload, TypeAlias
 
 FIG_NO_PAT = re.compile(r"^[0-9]{1,4}[A-Z]{0,2}(?:-[0-9]{1,4})?$")
 DASH_TRANSLATION = str.maketrans({
@@ -413,24 +414,45 @@ def expand_bbox(img, bbox, max_expand=512, min_fraction=0.005, margin=12):
     return x1, y1, x2, y2
 
 
-def pad_square(img, size=1024, return_meta=False):
+PadSquareMeta = Dict[str, Union[int, float]]
+PadSquareImage: TypeAlias = np.ndarray
+
+
+@overload
+def pad_square(img: PadSquareImage, size: int = 2048, *, return_meta: Literal[False] = False) -> PadSquareImage:
+    ...
+
+
+@overload
+def pad_square(img: PadSquareImage, size: int = 2048, *, return_meta: Literal[True]) -> Tuple[PadSquareImage, PadSquareMeta]:
+    ...
+
+
+def pad_square(img: PadSquareImage, size: int = 2048, *, return_meta: bool = False) -> Union[PadSquareImage, Tuple[PadSquareImage, PadSquareMeta]]:
     h, w = img.shape[:2]
     if h == 0 or w == 0:
         raise ValueError("Cannot pad empty image")
 
-    scale = size / float(max(h, w))
-    new_w = max(1, int(round(w * scale)))
-    new_h = max(1, int(round(h * scale)))
-    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
-    resized = cv2.resize(img, (new_w, new_h), interpolation=interp)
+    max_dim = max(h, w)
+    if max_dim > size:
+        scale = size / float(max_dim)
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
+        resized = cv2.resize(img, (new_w, new_h), interpolation=interp)
+    else:
+        scale = 1.0
+        new_w = int(w)
+        new_h = int(h)
+        resized = img.copy()
 
-    canvas = np.full((size, size), 255, np.uint8)
+    canvas: PadSquareImage = np.full((size, size), 255, np.uint8)
     offset_y = (size - new_h) // 2
     offset_x = (size - new_w) // 2
     canvas[offset_y:offset_y + new_h, offset_x:offset_x + new_w] = resized
 
     if return_meta:
-        meta = {
+        meta: PadSquareMeta = {
             "orig_width": int(w),
             "orig_height": int(h),
             "resized_width": int(new_w),
@@ -456,7 +478,7 @@ def normalize_tiff(tiff_path, out_png):
 
     for i, (tile, label, _) in enumerate(tiles, 1):
         # pad and resize
-        tile = pad_square(tile, 1024)
+        tile = pad_square(tile, 2048)
         # sanitize label for filename
         lbl = (label or f"FIG_{i}").upper().replace(".", "").replace(" ", "_")
         out = f"{base}_{lbl}.png"
