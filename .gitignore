@@ -19,10 +19,16 @@ docs/
 
 # Accelerate/W&B
 logs/
+wandb/
 
 # OS
 .DS_Store
 
+# Environment variables
 .env
 *.env
 .env*
+
+# IDEs
+.vscode/
+.claude/
