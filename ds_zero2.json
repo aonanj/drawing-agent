@@ -1,0 +1,6 @@
+{
+  "zero_optimization": {"stage": 2, "overlap_comm": true, "reduce_scatter": true, "contiguous_gradients": true},
+  "bf16": {"enabled": true},
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 4
+}

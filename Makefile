@@ -72,9 +72,6 @@ index: init-db
 reindex: init-db
 	$(PY) $(INDEXER) $(RAW) $(WORK) $(DB) --force
 
-clear-database:
-	$(SQLITE3) $(DB) "DELETE FROM docs; DELETE FROM figures; DELETE FROM text_fts;"
-
 # ==== Build datasets ====
 dataset: train val test
 
@@ -99,6 +96,10 @@ clean-outputs:
 	rm -rf $(WORK)/images $(WORK)/control $(DSDIR)
 	mkdir -p $(WORK)/images $(WORK)/control $(DSDIR)
 
+clear-database:
+	$(SQLITE3) $(DB) "DELETE FROM docs; DELETE FROM figures; DELETE FROM text_fts;"
+
 clean-all:
 	rm -rf $(WORK) $(DSDIR)
 	mkdir -p $(WORK) $(DSDIR)
+	$(SQLITE3) $(DB) "DELETE FROM docs; DELETE FROM figures; DELETE FROM text_fts;"
