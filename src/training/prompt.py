@@ -5,12 +5,12 @@ from collections import Counter
 # ---------- Helpers ----------
 # Diagram types by signal terms
 _TYPES = [
-    ("flowchart", r"\b(flow|flowchart|step|process|operation|block\s*([0-9]+)?)\b"),
-    ("block diagram", r"\b(block\s*diagram|module|unit|processor|controller|bus|interface)\b"),
+    ("flowchart", r"\b(flow|flowchart|method|flow\s*diagram|step|process|operation|block\s*([0-9]+)?)\b"),
+    ("block diagram", r"\b(block\s*diagram|module|unit|processor|controller|bus|interface|CPU|GPU|memory)\b"),
     ("mechanical", r"\b(shaft|gear|housing|valve|bracket|piston|bearing|assembly|fastener|linkage|spring)\b"),
     ("electrical schematic", r"\b(resistor|capacitor|inductor|transistor|op[- ]?amp|schematic|circuit)\b"),
     ("graph", r"\b(graph|plot|chart|curve|vs\.|x[- ]?axis|y[- ]?axis)\b"),
-    ("perspective", r"\b(perspective|isometric|3d)\b"),
+    ("perspective", r"\b(perspective|isometric|3d|exploded)\b"),
     ("orthographic", r"\b(front\s*view|side\s*view|top\s*view|section|cross[- ]?section|plan\s*view)\b"),
 ]
 _TYPE_RX = [(name, re.compile(pat, re.I)) for name, pat in _TYPES]
@@ -104,13 +104,13 @@ def _extract_view(text: str) -> str:
     m = _VIEW_RX.search(text or "")
     return m.group(0).lower() if m else "unspecified"
 
-def _top_k_words(text: str, k=14):
+def _top_k_words(text: str, k=25):
     # crude noun-ish terms by stoplist
     stop = {
         "the","a","an","of","and","or","to","in","on","for","from","with","without","into","onto",
         "is","are","be","as","by","at","over","under","between","within","this","that","those","these",
         "system","device","method","apparatus","component","unit","module","figure","fig","fig.",
-        "diagram","view","example","exemplary","may","can","one","two","three","first","second","third"
+        "diagram","view","example","exemplary","may","can","one","two","three","first","second","third", "accordance", "embodiment", "present", "disclosure", "invention", "figs.", "figs", "etc", "etc.", "such", "including", "shown", "includes", "used", "using", "also", "use", "different", "various", "variety"  
     }
     words = [w.lower() for w in _WORD_RX.findall(text)]
     words = [w for w in words if w not in stop and len(w) > 2]
@@ -169,7 +169,7 @@ def _extract_relations(text: str, limit=4):
             break
     return ", ".join(out[:limit]) if out else "unspecified"
 
-def _extract_labels(text: str, limit=12):
+def _extract_labels(text: str, limit=20):
     nums = []
     for n in _NUMERAL_RX.findall(text or ""):
         n = n.strip().rstrip("'′")
@@ -190,6 +190,10 @@ def _trim(s: str, max_len=360):
     return (s[: max_len - 1] + "…") if len(s) > max_len else s
 
 # ---------- Public API ----------
+def classify_diagram_type(text: str | None) -> str:
+    """Return the inferred diagram type for given figure context."""
+    return _classify(_clean(text or ""))
+
 TEMPLATE = (
     "Style: USPTO patent line art, monochrome, 300dpi, white background. "
     "Figure: {fig_no}. Type: {diagram_type}. View: {view}. "
@@ -204,7 +208,7 @@ def build_prompt(fig_text: str, claims_subset: str|None = None, fig_label: str|N
     fig_label: OCR'd 'FIG. n' label (e.g., 'FIG. 3A'); improves Figure field
     """
     base_text = _clean(fig_text or "")
-    diagram_type = _classify(base_text)
+    diagram_type = classify_diagram_type(fig_text)
     view = _extract_view(base_text)
     objects = _top_k_words(base_text, k=14) or "{unspecified}"
     relations = _extract_relations(base_text)
@@ -222,7 +226,7 @@ def build_prompt(fig_text: str, claims_subset: str|None = None, fig_label: str|N
 
     if claims_subset:
         # Add only visualizable constraints: short, trimmed, de-duplicated numerals retained
-        claims_cue = _trim(claims_subset, 1000)
+        claims_cue = _trim(claims_subset, 2000)
         claim_labels = _extract_labels(claims_cue, limit=12)
         prompt += f" Constraints: {claims_cue}"
         if claim_labels != "if present":

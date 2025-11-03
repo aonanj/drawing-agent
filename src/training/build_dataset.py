@@ -52,10 +52,10 @@ from pathlib import Path
 from typing import Dict, Iterable
 
 # Local modules
-from parse_xml import parse_doc
-from img_norm import load_tiff, deskew, binarize, split_figures, pad_square, expand_bbox
+from parse_xml import parse_doc, FIG_RX
+from img_norm import load_tiff, binarize, split_figures, pad_square
 from control import canny_map
-from prompt import build_prompt
+from prompt import build_prompt, classify_diagram_type
 
 
 # ------------ FS utils ------------
@@ -154,13 +154,75 @@ def extract_fig_num(label: str | None) -> str | None:
 
 # ------------ Core builders ------------
 
-def _choose_fig_text(meta: Dict) -> str:
-    """Prefer the first two figure-referencing paragraphs, else caption titles, else empty."""
-    ps = [p for p in (meta.get("figure_paras") or []) if p and p.strip()]
-    if not ps:
-        titles = [t for t in (meta.get("titles") or []) if t and t.strip()]
+def _choose_fig_text(meta: Dict, fig_num: str | None) -> str:
+    """
+    Choose paragraphs describing a specific figure:
+    - start at the first paragraph referencing `fig_num`
+    - include following paragraphs until one references other figures
+    - ensure at least two paragraphs by appending the immediate next paragraph when available
+    Falls back to generic figure paragraphs or titles if no match is found.
+    """
+    paragraphs = [p for p in (meta.get("figure_paras") or []) if p and p.strip()]
+    titles = [t for t in (meta.get("titles") or []) if t and t.strip()]
+    if not paragraphs:
         return " ".join(titles[:2])
-    return " ".join(ps[:2])
+
+    if not fig_num:
+        # No figure identifier; fall back to the first couple of paragraphs.
+        return " ".join(paragraphs[:2]) or " ".join(titles[:2])
+
+    target = canonical_fig_num(fig_num)
+    if not target:
+        return " ".join(paragraphs[:2]) or " ".join(titles[:2])
+
+    para_refs = []
+    for p in paragraphs:
+        refs = set()
+        for m in FIG_RX.finditer(p):
+            canon = canonical_fig_num(m.group(1))
+            if canon:
+                refs.add(canon)
+        para_refs.append(refs)
+
+    start_idx = None
+    for idx, refs in enumerate(para_refs):
+        if target in refs:
+            start_idx = idx
+            break
+    if start_idx is None:
+        normalized_target = target.replace("-", "")
+        for idx, paragraph in enumerate(paragraphs):
+            para_norm = (
+                paragraph.upper()
+                .replace(" ", "")
+                .replace(".", "")
+                .replace(",", "")
+                .replace("-", "")
+            )
+            if "FIG" in para_norm and normalized_target in para_norm:
+                start_idx = idx
+                break
+    if start_idx is None:
+        return " ".join(paragraphs[:2]) or " ".join(titles[:2])
+
+    selected = []
+    idx = start_idx
+    while idx < len(paragraphs):
+        refs = para_refs[idx]
+        if idx != start_idx and refs and target not in refs:
+            break
+        selected.append(paragraphs[idx])
+        idx += 1
+
+    if len(selected) < 2 and start_idx + 1 < len(paragraphs):
+        next_para = paragraphs[start_idx + 1]
+        if next_para not in selected:
+            selected.append(next_para)
+
+    if selected:
+        return " ".join(selected)
+
+    return " ".join(paragraphs[:2]) or " ".join(titles[:2])
 
 
 def process_tiff(
@@ -182,7 +244,7 @@ def process_tiff(
     img = load_tiff(str(tiff_path))
     if img is None:
         return 0
-    img = deskew(img)
+    # Skip deskew to preserve original orientation
     img = binarize(img)
 
     # Detect figure regions: list of (crop_img, fig_label, (x1,y1,x2,y2))
@@ -192,7 +254,6 @@ def process_tiff(
 
     # Prepare shared text block for prompts
     meta = parse_doc(str(xml_path))
-    fig_text = _choose_fig_text(meta)
     fig_nums_xml_set: set[str] = set()
     fig_nums_source = fig_nums_from_xml or meta.get("figure_nums", []) or []
     for raw_num in fig_nums_source:
@@ -208,20 +269,30 @@ def process_tiff(
     ensure_dir(out_img_dir)
     ensure_dir(out_ctrl_dir)
 
-    for idx, (_, fig_label, bbox) in enumerate(tiles, 1):
+    for idx, (tile_img, fig_label, bbox) in enumerate(tiles, 1):
         fig_num = extract_fig_num(fig_label)
         if not fig_num:
             continue
         if fig_num not in fig_nums_xml_set:
             continue
-        # Expand bbox to include full inked content before cropping
-        x1, y1, x2, y2 = expand_bbox(img, bbox)
-        raw_crop = img[y1:y2, x1:x2]
-        if raw_crop.size == 0:
+
+        fig_text = _choose_fig_text(meta, fig_num)
+        diagram_type = classify_diagram_type(fig_text)
+        method_claim = meta.get("method_claim") or ""
+        default_claims = claims_text or meta.get("claims", "") or ""
+        claims_source = method_claim if (diagram_type == "flowchart" and method_claim) else default_claims
+
+        # Use the full tile image (no cropping)
+        # tile_img is already the full page from split_figures
+        if tile_img.size == 0:
             continue
 
         # Resize to square canvas without losing aspect ratio
-        crop, resize_meta = pad_square(raw_crop, size=target_size, return_meta=True)
+        crop, resize_meta = pad_square(tile_img, size=target_size, return_meta=True)
+        
+        # Store original dimensions before padding
+        orig_height, orig_width = tile_img.shape[:2]
+        x1, y1, x2, y2 = bbox  # Keep original bbox for metadata
 
         # Name with OCR label if present
         label_token = sanitize(f"FIG_{fig_num}")
@@ -239,7 +310,7 @@ def process_tiff(
         canny_map(str(img_out), str(ctrl_out))
 
         # Prompt with fig_label cue
-        prompt = build_prompt(fig_text, claims_subset=claims_text[:500], fig_label=fig_label)
+        prompt = build_prompt(fig_text, claims_subset=claims_source[:500], fig_label=fig_label)
 
         # Label↔XML consistency flag
         match_xml = fig_num in fig_nums_xml_set
@@ -253,8 +324,8 @@ def process_tiff(
             "doc_id": doc_id,
             "sha256": sha256_file(img_out),
             "bbox": [int(x1), int(y1), int(x2), int(y2)],
-            "bbox_initial": [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])],
-            "original_size": [int(raw_crop.shape[1]), int(raw_crop.shape[0])],  # width, height
+            "bbox_initial": [int(x1), int(y1), int(x2), int(y2)],
+            "original_size": [int(orig_width), int(orig_height)],  # width, height
             "resize_meta": resize_meta,
             "fig_label": fig_label,
             "tiff_source": str(tiff_path),
