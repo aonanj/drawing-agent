@@ -38,8 +38,6 @@ accelerate config
 bash scripts/run_finetune.sh
 ```
 
-📖 **See [docs/quickstart.md](docs/quickstart.md) for detailed instructions**
-
 ## ➣ Repository Layout
 
 ```
@@ -60,10 +58,6 @@ drawing-agent/
 │       ├── train.jsonl
 │       ├── val.jsonl
 │       └── test.jsonl
-├── docs/
-│   ├── project_overview.md      # Project documentation
-│   ├── quickstart.md            # Step-by-step guide
-│   └── implementation-overview.md
 ├── scripts/
 │   ├── setup_environment.sh     # Environment setup
 │   ├── process_uspto.sh         # Process USPTO data
@@ -427,17 +421,11 @@ This project is in active development. Current checkpoints available:
 - `outputs/sdxl-qlora-run-3/checkpoint-3500/`: Latest trained model
 - Multiple intermediate checkpoints at 500-step intervals
 
-## ➣ Contributing
-
-Contributions welcome! Please:
-1. Test changes with `make check` and sample patents
-2. Update documentation for new features
-3. Follow existing code style (Black, type hints)
-4. Add comments for complex logic
-
 ## ➣ License
 
-Proprietary license - see LICENSE file for details.
+This repository is publicly viewable for portfolio purposes only. The code is proprietary.
+Copyright © 2025 Phaethon Order LLC. All rights reserved.
+See [LICENSE](LICENSE.md) for terms.
 
 ## ➣ Resources
 
