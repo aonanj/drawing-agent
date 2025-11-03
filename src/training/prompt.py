@@ -21,9 +21,6 @@ _VIEW_RX = re.compile(
     re.I,
 )
 
-# Reference numerals like “110”, “110A”, “12′”
-_NUMERAL_RX = re.compile(r"\b([0-9]{1,4}[A-Za-z]?['′]?)\b")
-
 # Simple relation phrases
 _REL_PHRASES = [
     r"connected to", r"coupled to", r"attached to", r"mounted to", r"joined to",
@@ -169,21 +166,77 @@ def _extract_relations(text: str, limit=4):
             break
     return ", ".join(out[:limit]) if out else "unspecified"
 
-def _extract_labels(text: str, limit=20):
-    nums = []
-    for n in _NUMERAL_RX.findall(text or ""):
-        n = n.strip().rstrip("'′")
-        if n and n.isascii():
-            nums.append(n.upper())
-    # dedupe keep order
-    seen, out = set(), []
-    for n in nums:
-        if n not in seen:
-            seen.add(n)
-            out.append(n)
-        if len(out) >= limit:
+def _extract_labels(text: str, fig_label: str | None = None, limit=20):
+    if not text:
+        return "if present"
+
+    def _figure_prefix() -> str | None:
+        sources = [fig_label or ""]
+        # Scan caption text only if label missing
+        if not fig_label:
+            sources.append(text)
+        fig_rx = re.compile(r"\bfig(?:\.|ure)?\s*(\d+)\b", re.I)
+        for source in sources:
+            if not source:
+                continue
+            match = fig_rx.search(source)
+            if match:
+                return match.group(1)
+        return None
+
+    prefix = _figure_prefix()
+    if not prefix:
+        return "if present"
+
+    label_rx = re.compile(rf"\b({re.escape(prefix)}[0-9]+[A-Za-z]?['′]?)\b")
+    token_rx = re.compile(r"\b[0-9A-Za-z]+(?:['′])?\b")
+    stop_words = {"a", "an", "the", "said", "mentioned", "aforementioned"}
+    connector_stops = {"and", "or"}
+    tokens = list(token_rx.finditer(text))
+    if not tokens:
+        return "if present"
+
+    token_index_by_span = {(tok.start(), tok.end()): idx for idx, tok in enumerate(tokens)}
+
+    seen, labels = set(), []
+    leading_fillers = {"of", "to", "from", "in", "on", "at", "by", "for", "with", "within", "between", "into", "onto"}
+
+    for match in label_rx.finditer(text):
+        span = (match.start(), match.end())
+        token_idx = token_index_by_span.get(span)
+        if token_idx is None:
+            continue
+        parts = [match.group(1).rstrip("'′").upper()]
+        i = token_idx - 1
+        while i >= 0:
+            tok = tokens[i]
+            gap = text[tok.end(): tokens[i + 1].start()]
+            if any(ch in gap for ch in ".;:?!\n"):
+                break
+            word = tok.group()
+            lower = word.lower()
+            if lower in stop_words:
+                break
+            if label_rx.match(word):
+                break
+            if lower in connector_stops:
+                break
+            if word.isnumeric() or any(ch.isdigit() for ch in word):
+                break
+            # prepend descriptor words
+            parts.insert(0, word)
+            i -= 1
+        while len(parts) > 1 and parts[0].lower() in leading_fillers:
+            parts.pop(0)
+        label_text = _clean(" ".join(parts))
+        key = label_text.lower()
+        if key and key not in seen:
+            seen.add(key)
+            labels.append(label_text)
+        if len(labels) >= limit:
             break
-    return ", ".join(out) if out else "if present"
+
+    return ", ".join(labels) if labels else "if present"
 
 def _trim(s: str, max_len=360):
     s = _clean(s)
@@ -212,7 +265,7 @@ def build_prompt(fig_text: str, claims_subset: str|None = None, fig_label: str|N
     view = _extract_view(base_text)
     objects = _top_k_words(base_text, k=14) or "{unspecified}"
     relations = _extract_relations(base_text)
-    labels = _extract_labels(base_text)
+    labels = _extract_labels(base_text, fig_label=fig_label)
 
     fig_no = (fig_label or "{unknown}").replace("FIGURE", "FIG.").replace("FIG ", "FIG. ").strip()
     prompt = TEMPLATE.format(
@@ -225,10 +278,5 @@ def build_prompt(fig_text: str, claims_subset: str|None = None, fig_label: str|N
     )
 
     if claims_subset:
-        # Add only visualizable constraints: short, trimmed, de-duplicated numerals retained
-        claims_cue = _trim(claims_subset, 2000)
-        claim_labels = _extract_labels(claims_cue, limit=12)
-        prompt += f" Constraints: {claims_cue}"
-        if claim_labels != "if present":
-            prompt += f" Claim labels: {claim_labels}"
+        prompt += f" Constraints: {claims_subset}."
     return prompt
