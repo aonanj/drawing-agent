@@ -1,17 +1,19 @@
 # ==== Config ====
-PY        ?= .venv/bin/python3
-SQLITE3   ?= sqlite3
+PY        ?= python3
+export DATABASE_URL
+export NEON_DATABASE_URL
 
 RAW       ?= data/raw
 WORK      ?= data/work
 EXTRACT   ?= $(WORK)/extracted
 DSDIR     ?= data/ds
-DB        ?= $(WORK)/index.sqlite
 
 SCHEMA    ?= src/training/schema.sql
 INDEXER   ?= src/training/index_docs.py
 BUILDER   ?= src/training/build_dataset.py
 FTS_LOADER?= src/training/load_fts.py
+INIT_DB   ?= src/training/init_db.py
+DB_ADMIN  ?= src/training/db_admin.py
 
 TRAIN_OUT ?= $(DSDIR)/train.jsonl
 VAL_OUT   ?= $(DSDIR)/val.jsonl
@@ -25,7 +27,7 @@ TEST_OUT  ?= $(DSDIR)/test.jsonl
 help:
 	@echo "Targets:"
 	@echo "  dirs            Create required directories"
-	@echo "  init-db         Create SQLite schema"
+	@echo "  init-db         Create Neon/Postgres schema"
 	@echo "  index           Index ZIP bundles into docs table"
 	@echo "  reindex         Re-extract and re-index with --force"
 	@echo "  train           Build train JSONL"
@@ -34,12 +36,12 @@ help:
 	@echo "  dataset         Build all splits (train/val/test)"
 	@echo "  fts             Load captions/paras/claims into FTS table"
 	@echo "  check           Show quick DB stats"
-	@echo "  dbinfo          Show SQLite PRAGMAs"
+	@echo "  dbinfo          Show connection details"
 	@echo "  counts          Count rows per table"
 	@echo "  vacuum          VACUUM database"
-	@echo "  integrity       PRAGMA integrity_check"
+	@echo "  integrity       Show live/dead tuple counts"
 	@echo "  clean-outputs   Remove generated PNGs, control maps, JSONL"
-	@echo "  clean-all       Remove DB, extracted bundles, and outputs"
+	@echo "  clean-all       Remove extracted bundles, outputs, and clear database tables"
 
 # ==== Directory setup ====
 dirs:
@@ -48,41 +50,39 @@ dirs:
 
 # ==== Database ====
 init-db: dirs
-	$(SQLITE3) $(DB) < $(SCHEMA)
+	$(PY) $(INIT_DB) --schema $(SCHEMA)
 
 dbinfo:
-	@$(SQLITE3) $(DB) "PRAGMA database_list; PRAGMA journal_mode; PRAGMA synchronous;"
+	@$(PY) $(DB_ADMIN) info
 
 counts:
-	@$(SQLITE3) $(DB) "SELECT 'docs', COUNT(*) FROM docs;"
-	@$(SQLITE3) $(DB) "SELECT 'figures', COUNT(*) FROM figures;" || true
-	@$(SQLITE3) $(DB) "SELECT 'text_fts', COUNT(*) FROM text_fts;" || true
+	@$(PY) $(DB_ADMIN) counts
 
 vacuum:
-	@$(SQLITE3) $(DB) "VACUUM;"
+	@$(PY) $(DB_ADMIN) vacuum
 
 integrity:
-	@$(SQLITE3) $(DB) "PRAGMA integrity_check;"
+	@$(PY) $(DB_ADMIN) integrity
 
 # ==== Indexing from ZIPs ====
 # Scans $(RAW) for .zip files. Ignores zips with 0 or >1 XML.
 index: init-db
-	$(PY) $(INDEXER) $(RAW) $(WORK) $(DB)
+	$(PY) $(INDEXER) $(RAW) $(WORK)
 
 reindex: init-db
-	$(PY) $(INDEXER) $(RAW) $(WORK) $(DB) --force
+	$(PY) $(INDEXER) $(RAW) $(WORK) --force
 
 # ==== Build datasets ====
 dataset: train val test
 
 train: dirs
-	$(PY) $(BUILDER) --index $(DB) --out_dir $(WORK) --jsonl_out $(TRAIN_OUT) --split train
+	$(PY) $(BUILDER) --out_dir $(WORK) --jsonl_out $(TRAIN_OUT) --split train
 
 val: dirs
-	$(PY) $(BUILDER) --index $(DB) --out_dir $(WORK) --jsonl_out $(VAL_OUT) --split val
+	$(PY) $(BUILDER) --out_dir $(WORK) --jsonl_out $(VAL_OUT) --split val
 
 test: dirs
-	$(PY) $(BUILDER) --index $(DB) --out_dir $(WORK) --jsonl_out $(TEST_OUT) --split test
+	$(PY) $(BUILDER) --out_dir $(WORK) --jsonl_out $(TEST_OUT) --split test
 
 # ==== Optional FTS load ====
 fts:
@@ -97,9 +97,9 @@ clean-outputs:
 	mkdir -p $(WORK)/images $(WORK)/control $(DSDIR)
 
 clear-database:
-	$(SQLITE3) $(DB) "DELETE FROM docs; DELETE FROM figures; DELETE FROM text_fts;"
+	$(PY) $(DB_ADMIN) clear
 
 clean-all:
 	rm -rf $(WORK) $(DSDIR)
 	mkdir -p $(WORK) $(DSDIR)
-	$(SQLITE3) $(DB) "DELETE FROM docs; DELETE FROM figures; DELETE FROM text_fts;"
+	$(PY) $(DB_ADMIN) clear

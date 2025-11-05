@@ -1,16 +1,13 @@
--- SQLite init
-PRAGMA journal_mode=WAL;
-PRAGMA synchronous=NORMAL;
-PRAGMA foreign_keys=ON;
+-- Postgres schema for the drawing-agent index database.
 
 -- Core index of documents (one XML + many TIFFs)
 CREATE TABLE IF NOT EXISTS docs (
   doc_id TEXT PRIMARY KEY,          -- e.g., US20230001234A1 or US1234567B2
   xml     TEXT NOT NULL,            -- absolute or project-relative path to the XML
-  tiffs   TEXT NOT NULL             -- JSON array of absolute or project-relative TIFF paths
+  tiffs   JSONB NOT NULL            -- JSON array of absolute or project-relative TIFF paths
 );
 
-CREATE INDEX IF NOT EXISTS idx_docs_xml   ON docs(xml);
+CREATE INDEX IF NOT EXISTS idx_docs_xml ON docs(xml);
 
 -- Optional per-figure registry (filled later if you persist crops/bboxes)
 CREATE TABLE IF NOT EXISTS figures (
@@ -25,25 +22,25 @@ CREATE TABLE IF NOT EXISTS figures (
   FOREIGN KEY(doc_id) REFERENCES docs(doc_id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_fig_doc    ON figures(doc_id);
-CREATE INDEX IF NOT EXISTS idx_fig_label  ON figures(fig_label);
+CREATE INDEX IF NOT EXISTS idx_fig_doc   ON figures(doc_id);
+CREATE INDEX IF NOT EXISTS idx_fig_label ON figures(fig_label);
 
 -- Optional full-text search over extracted text
--- Safe to run even if unused.
-CREATE VIRTUAL TABLE IF NOT EXISTS text_fts USING fts5(
-  doc_id UNINDEXED,
-  section,                          -- 'caption' | 'paragraph' | 'claim' | etc.
-  content,
-  tokenize='porter'
+CREATE TABLE IF NOT EXISTS text_fts (
+  doc_id TEXT NOT NULL REFERENCES docs(doc_id) ON DELETE CASCADE,
+  section TEXT NOT NULL,            -- 'caption' | 'paragraph' | 'claim' | etc.
+  content TEXT NOT NULL,
+  content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(content, ''))) STORED,
+  PRIMARY KEY (doc_id, section)
 );
 
+CREATE INDEX IF NOT EXISTS idx_text_fts_content_tsv
+  ON text_fts USING GIN (content_tsv);
+
 -- Convenience view to see counts of TIFFs per doc
-CREATE VIEW IF NOT EXISTS doc_overview AS
+CREATE OR REPLACE VIEW doc_overview AS
 SELECT
   d.doc_id,
   d.xml,
-  json_array_length(d.tiffs) AS tiff_count
+  jsonb_array_length(d.tiffs) AS tiff_count
 FROM docs d;
-
--- Integrity hints
-PRAGMA wal_autocheckpoint=1000;

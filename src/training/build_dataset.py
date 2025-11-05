@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a text→image training dataset from USPTO Red Book XML + TIFF pages.
+Build a text→image training dataset from USPTO Red Book XML + TIFF pages using a Neon/Postgres index.
 
 Each output row (JSONL) corresponds to ONE figure crop:
 {
@@ -30,14 +30,14 @@ Each output row (JSONL) corresponds to ONE figure crop:
 }
 
 Assumptions:
-- XML and TIFF paths are pre-indexed in SQLite table `docs(doc_id TEXT PRIMARY KEY, xml TEXT, tiffs TEXT_JSON)`.
+- XML and TIFF paths are pre-indexed in Postgres table `docs(doc_id TEXT PRIMARY KEY, xml TEXT, tiffs JSONB)`.
 - `img_norm.py` defines: load_tiff, deskew, binarize, split_figures, pad_square.
 - `prompt.py` defines: build_prompt(fig_text, claims_subset=None, fig_label=None).
 - `control.py` defines: canny_map(png_in, png_out).
 
 Usage:
   python src/training/build_dataset.py \
-    --index data/work/index.sqlite \
+    --dsn postgresql://... \
     --out_dir data/work \
     --jsonl_out data/ds/train.jsonl \
     --split train
@@ -47,15 +47,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sqlite3
 from pathlib import Path
 from typing import Dict, Iterable
 
 # Local modules
+from psycopg.rows import tuple_row
+
 from parse_xml import parse_doc, FIG_RX
 from img_norm import load_tiff, binarize, split_figures, pad_square
 from control import canny_map
 from prompt import build_prompt, classify_diagram_type
+
+try:  # Allow running as script or module.
+    from training.db_utils import connection_ctx
+except ImportError:  # pragma: no cover
+    from db_utils import connection_ctx
 
 
 # ------------ FS utils ------------
@@ -336,23 +342,24 @@ def process_tiff(
     return written
 
 
-def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
+def main(dsn: str | None, out_dir: Path, jsonl_out: Path, split: str) -> None:
     ensure_dir(jsonl_out.parent)
 
     # Output subdirs
     out_img_dir = out_dir / "images"
     out_ctrl_dir = out_dir / "control"
 
-    conn = sqlite3.connect(str(index_db))
-    cur = conn.cursor()
-    cur.execute("SELECT doc_id, xml, tiffs FROM docs")
-
     total_docs = 0
     total_pages = 0
     total_figs = 0
 
+    with connection_ctx(dsn, row_factory=tuple_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT doc_id, xml, tiffs FROM docs")
+            rows = cur.fetchall()
+
     with open(jsonl_out, "w", encoding="utf-8") as jf:
-        for doc_id, xml, tiffs_json in cur.fetchall():
+        for doc_id, xml, tiffs_value in rows:
             xml_path = Path(xml)
             if not xml_path.exists():
                 continue
@@ -362,10 +369,15 @@ def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
             claims_text = meta.get("claims", "") or ""
             fig_nums_from_xml = meta.get("figure_nums", []) or []
 
-            try:
-                tiffs = json.loads(tiffs_json or "[]")
-            except Exception:
+            if isinstance(tiffs_value, str):
+                try:
+                    tiffs = json.loads(tiffs_value or "[]")
+                except Exception:
+                    tiffs = []
+            elif tiffs_value is None:
                 tiffs = []
+            else:
+                tiffs = list(tiffs_value)
             if not tiffs:
                 continue
 
@@ -392,8 +404,6 @@ def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
                 )
                 total_figs += figs
 
-    conn.close()
-
     # Minimal run summary to stderr
     import sys
     print(
@@ -406,15 +416,18 @@ def main(index_db: Path, out_dir: Path, jsonl_out: Path, split: str) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Build patent-drawing training dataset")
-    ap.add_argument("--index", required=True, help="SQLite index with table docs(doc_id, xml, tiffs)")
+    ap.add_argument("--dsn", help="Postgres connection string; falls back to DATABASE_URL env variable.")
     ap.add_argument("--out_dir", required=True, help="Working dir for images/control")
     ap.add_argument("--jsonl_out", required=True, help="Output JSONL path")
     ap.add_argument("--split", required=True, choices=["train", "val", "test"], help="Dataset split label")
     args = ap.parse_args()
 
-    main(
-        index_db=Path(args.index),
-        out_dir=Path(args.out_dir),
-        jsonl_out=Path(args.jsonl_out),
-        split=args.split,
-    )
+    try:
+        main(
+            dsn=args.dsn,
+            out_dir=Path(args.out_dir),
+            jsonl_out=Path(args.jsonl_out),
+            split=args.split,
+        )
+    except RuntimeError as exc:  # pragma: no cover - CLI guard
+        raise SystemExit(str(exc)) from exc

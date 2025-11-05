@@ -8,7 +8,7 @@ Generate patent-style technical drawings from text using fine-tuned Stable Diffu
 - **Intelligent Image Processing**: OCR-based figure detection, binarization, deskewing, denoising, and splitting of multi-figure sheets
 - **Control Map Generation**: Canny edge detection for ControlNet guidance
 - **Structured Prompt Generation**: Diagram type detection, spatial relations extraction, and multi-level context assembly
-- **SQLite-based Indexing**: Efficient tracking of processed patents with full-text search capability
+- **Neon/Postgres Indexing**: Efficient tracking of processed patents with full-text search capability
 - **Family-based Splitting**: Prevent data leakage with patent family-aware train/val/test splits
 - **QLoRA Fine-tuning**: Memory-efficient 4-bit quantized training with LoRA adapters
 - **Make-based Workflow**: Modular pipeline with incremental processing and database management
@@ -16,6 +16,9 @@ Generate patent-style technical drawings from text using fine-tuned Stable Diffu
 ## ➣ Quick Start
 
 ```bash
+# 0. Configure Neon connection string (once per shell)
+export DATABASE_URL="postgresql://USER:PASS@HOST/dbname"
+
 # 1. Setup directories and database
 make dirs
 make init-db
@@ -50,7 +53,6 @@ drawing-agent/
 ├── data/
 │   ├── raw/                     # USPTO bulk downloads (zipped patents)
 │   ├── work/                    # Working directory
-│   │   ├── index.sqlite         # Patent index database
 │   │   ├── extracted/           # Extracted XML and TIFF files
 │   │   ├── images/              # Processed figure crops
 │   │   └── control/             # Canny edge control maps
@@ -71,19 +73,21 @@ drawing-agent/
 │   ├── prompt.py                # Structured prompt building
 │   ├── build_dataset.py         # Dataset construction from indexed patents
 │   ├── load_fts.py              # Full-text search index loader
-│   └── schema.sql               # SQLite database schema
+│   └── schema.sql               # Postgres database schema
 ├── outputs/                     # Model checkpoints and LoRA adapters
 ├── Makefile                     # Build automation
 ├── pyproject.toml               # Python package configuration
 └── README.md                    # This file
 ```
 
+> **Note:** The patent index now lives in Neon (Postgres). Set the `DATABASE_URL` (or `NEON_DATABASE_URL`) environment variable to point at your Neon connection string before running the pipeline.
+
 ## ➣ Makefile Commands
 
 ```bash
 # Database setup
 make dirs            # Create required directories
-make init-db         # Initialize SQLite schema
+make init-db         # Initialize Neon/Postgres schema (DATABASE_URL must be set)
 make index           # Index ZIP bundles into database
 make reindex         # Re-extract and re-index with --force
 
@@ -97,9 +101,9 @@ make dataset         # Build all splits
 make fts             # Load full-text search index
 make check           # Show database statistics
 make counts          # Count rows per table
-make vacuum          # Optimize database
+make vacuum          # Run VACUUM (ANALYZE)
 make clean-outputs   # Remove generated images and JSONL files
-make clean-all       # Remove database, extracted files, and outputs
+make clean-all       # Clear database tables and remove extracted files
 
 ```
 
@@ -221,7 +225,7 @@ training:
 - Scans `data/raw/` for `.zip` files containing patents
 - Validates: exactly 1 XML + at least 1 TIFF per zip
 - Extracts files to `data/work/extracted/`
-- Records paths in SQLite database (`data/work/index.sqlite`)
+- Records paths in Neon/Postgres (set `DATABASE_URL` or `NEON_DATABASE_URL`)
 
 ### 2. XML Parsing (`parse_xml.py`)
 - Extracts figure descriptions, claims, and titles from patent XML
@@ -285,7 +289,7 @@ training:
 - **scikit-image**: Advanced image processing utilities
 
 ### Data Management
-- **SQLite3**: Patent index and full-text search
+- **Neon/Postgres (psycopg)**: Patent index and full-text search
 - **lxml**: Fast XML parsing
 - **Datasets**: HuggingFace dataset loading and processing
 
@@ -330,34 +334,43 @@ image.save("patent_drawing.png")
 
 ## ➣ Database Schema
 
-The SQLite database (`data/work/index.sqlite`) tracks all processed patents:
+The Neon/Postgres database tracks all processed patents:
 
 ```sql
--- Core document index
 CREATE TABLE docs (
-  doc_id TEXT PRIMARY KEY,    -- e.g., US20230001234A1
-  xml    TEXT NOT NULL,       -- path to extracted XML
-  tiffs  TEXT NOT NULL        -- JSON array of TIFF paths
+  doc_id TEXT PRIMARY KEY,
+  xml    TEXT NOT NULL,
+  tiffs  JSONB NOT NULL
 );
 
--- Optional figure registry
 CREATE TABLE figures (
-  id        TEXT PRIMARY KEY, -- {doc_id}:{page}:{label}
-  doc_id    TEXT NOT NULL,
+  id        TEXT PRIMARY KEY,
+  doc_id    TEXT NOT NULL REFERENCES docs(doc_id) ON DELETE CASCADE,
   tiff_path TEXT NOT NULL,
-  fig_label TEXT,             -- e.g., "FIG. 3A"
+  fig_label TEXT,
   bbox_x1   INTEGER,
   bbox_y1   INTEGER,
   bbox_x2   INTEGER,
   bbox_y2   INTEGER
 );
 
--- Full-text search (optional)
-CREATE VIRTUAL TABLE text_fts USING fts5(
-  doc_id UNINDEXED,
-  section,    -- 'caption' | 'paragraph' | 'claim'
-  content
+CREATE TABLE text_fts (
+  doc_id TEXT NOT NULL REFERENCES docs(doc_id) ON DELETE CASCADE,
+  section TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(content, ''))) STORED,
+  PRIMARY KEY (doc_id, section)
 );
+
+CREATE INDEX idx_text_fts_content_tsv
+  ON text_fts USING GIN (content_tsv);
+
+CREATE OR REPLACE VIEW doc_overview AS
+SELECT
+  doc_id,
+  xml,
+  jsonb_array_length(tiffs) AS tiff_count
+FROM docs;
 ```
 
 ## ➣ Troubleshooting
@@ -382,27 +395,39 @@ CREATE VIRTUAL TABLE text_fts USING fts5(
 - Check TIFF has sufficient white space between figures
 - Verify binarization threshold in `img_norm.py`
 
-**Database locked errors:**
-- Close any open connections to `index.sqlite`
-- Run `make vacuum` to optimize database
-- Check WAL files aren't corrupted (`.sqlite-shm`, `.sqlite-wal`)
+**Database connection errors:**
+- Ensure `DATABASE_URL` (or `NEON_DATABASE_URL`) is exported in your shell
+- Verify your Neon role has privileges to create tables and run VACUUM
+- Use `make dbinfo` to confirm connectivity and session settings
 
 ## ➣ Dataset Inspection
 
 Query the database to inspect indexed patents:
 
 ```bash
-# Count documents
-sqlite3 data/work/index.sqlite "SELECT COUNT(*) FROM docs;"
+# Count documents, figures, and text entries
+python src/training/db_admin.py counts
 
-# List first 10 patents
-sqlite3 data/work/index.sqlite "SELECT doc_id FROM docs LIMIT 10;"
+# Show connection and session details
+python src/training/db_admin.py info
 
-# Search for specific patent
-sqlite3 data/work/index.sqlite "SELECT * FROM docs WHERE doc_id='US12345678';"
+# Run an ad-hoc SQL query (DATABASE_URL must be exported)
+python - <<'PY'
+import os
+import psycopg
 
-# Check figure count (if figures table populated)
-sqlite3 data/work/index.sqlite "SELECT COUNT(*) FROM figures;"
+dsn = os.environ["DATABASE_URL"]
+with psycopg.connect(dsn) as conn:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT doc_id, jsonb_array_length(tiffs) AS pages
+            FROM docs
+            ORDER BY doc_id
+            LIMIT 10
+        """)
+        for doc_id, pages in cur.fetchall():
+            print(doc_id, pages)
+PY
 ```
 
 View generated JSONL samples:
@@ -434,4 +459,3 @@ See [LICENSE](LICENSE.md) for terms.
 - **PEFT Documentation**: https://huggingface.co/docs/peft
 - **Accelerate Guide**: https://huggingface.co/docs/accelerate
 - **Diffusers Training**: https://huggingface.co/docs/diffusers/training/overview
-
