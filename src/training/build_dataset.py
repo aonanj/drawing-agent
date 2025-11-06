@@ -316,7 +316,7 @@ def process_tiff(
         canny_map(str(img_out), str(ctrl_out))
 
         # Prompt with fig_label cue
-        prompt = build_prompt(fig_text, claims_subset=claims_source[:500], fig_label=fig_label)
+        prompt = build_prompt(fig_text, claims_subset=claims_source, fig_label=fig_label)
 
         # Label↔XML consistency flag
         match_xml = fig_num in fig_nums_xml_set
