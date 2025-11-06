@@ -357,7 +357,8 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
         "a", "an", "the", "said", "mentioned", "aforementioned",
         "is", "are", "was", "were", "be", "been", "being",
         "may", "can", "will", "shall", "would", "could", "should",
-        "this", "that", "these", "those", "another", "such",
+        "this", "that", "these", "those", "another", "such", "its", "their",
+        "of", "in", "on", "at", "by", "for", "with", "within", "between", "to", "from", "into", "onto",
     }
     connector_stops = {"and", "or"}
     punctuation_stops = {".", ",", ";", ":", "!", "?", "(", ")", "[", "]", "{", "}", "\""}
@@ -381,7 +382,6 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
 
     index_by_start = {tok.start(): idx for idx, tok in enumerate(tokens)}
     seen, labels = set(), []
-    leading_fillers = {"of", "to", "from", "in", "on", "at", "by", "for", "with", "within", "between", "into", "onto"}
 
     def _collect_context(start_idx: int, end_idx: int, display_label: str) -> str:
         parts = []
@@ -404,8 +404,6 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
                 break
             parts.insert(0, word)
             i -= 1
-        while len(parts) > 1 and parts and parts[0].lower() in leading_fillers:
-            parts.pop(0)
         while len(parts) > 1 and parts and parts[0].lower() in skip_tokens:
             parts.pop(0)
         if parts:
@@ -473,23 +471,62 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
     if labels:
         return ", ".join(labels[:limit])
 
-    # Fallback: return bare labels if context extraction failed.
-    bare_labels = []
-    for match in label_rx.finditer(text):
-        prefix_part = match.group("prefix") or ""
-        body_part = match.group("body") or ""
-        prime_part = match.group("prime") or ""
-        cleaned_label = (prefix_part + body_part).upper()
-        if len(cleaned_label) <= 1:
-            continue
-        if any(cleaned_label.lower().endswith(suffix) for suffix in ordinal_suffixes):
-            continue
-        key = (cleaned_label + prime_part).lower()
-        if key not in seen:
-            seen.add(key)
-            bare_labels.append(cleaned_label + prime_part)
-        if len(bare_labels) >= limit:
+    def _paragraph_spans(src: str) -> list[tuple[int, int, str]]:
+        spans: list[tuple[int, int, str]] = []
+        last_end = 0
+        splitter = re.compile(r"\r?\n\s*\r?\n")
+        for match in splitter.finditer(src):
+            start, end = last_end, match.start()
+            segment = src[start:end].strip()
+            if segment:
+                spans.append((start, end, segment))
+            last_end = match.end()
+        if last_end <= len(src):
+            segment = src[last_end:].strip()
+            if segment:
+                spans.append((last_end, len(src), segment))
+        if not spans and src.strip():
+            spans.append((0, len(src), src.strip()))
+        return spans
+
+    def _collect_labels_in_span(start: int, end: int) -> list[str]:
+        collected: list[str] = []
+        local_seen: set[str] = set()
+        for match in label_rx.finditer(text, start, end):
+            prefix_part = match.group("prefix") or ""
+            body_part = match.group("body") or ""
+            prime_part = match.group("prime") or ""
+            cleaned_label = (prefix_part + body_part).upper()
+            if len(cleaned_label) <= 1:
+                continue
+            if any(cleaned_label.lower().endswith(suffix) for suffix in ordinal_suffixes):
+                continue
+            key = (cleaned_label + prime_part).lower()
+            if key in local_seen:
+                continue
+            local_seen.add(key)
+            collected.append(cleaned_label + prime_part)
+            if len(collected) >= limit:
+                break
+        return collected
+
+    paragraph_spans = _paragraph_spans(text)
+    if paragraph_spans:
+        figure_para_rx = re.compile(rf"\bfig(?:\.|ure)?\s*(?:{prefix_pattern})\b", re.I)
+        for idx, (para_start, para_end, para_text) in enumerate(paragraph_spans):
+            if not figure_para_rx.search(para_text):
+                continue
+            span_start = para_start
+            span_end = para_end
+            if idx + 1 < len(paragraph_spans):
+                span_end = paragraph_spans[idx + 1][1]
+            para_labels = _collect_labels_in_span(span_start, span_end)
+            if para_labels:
+                return ", ".join(para_labels[:limit])
             break
+
+    # Fallback: return bare labels if paragraph-scoped extraction failed.
+    bare_labels = _collect_labels_in_span(0, len(text))
     return ", ".join(bare_labels[:limit]) if bare_labels else "if present"
 
 def _trim(s: str, max_len=360):
