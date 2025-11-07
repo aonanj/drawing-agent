@@ -346,7 +346,7 @@ def _extract_relations(text: str, limit=4):
             break
     return ", ".join(out[:limit]) if out else "unspecified"
 
-def _extract_labels(text: str, fig_label: str | None = None, limit=20):
+def _extract_labels(text: str, fig_label: str | None = None, limit=100):
     if not text:
         return "if present"
 
@@ -524,9 +524,6 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
         if len(labels) >= limit:
             break
 
-    if labels:
-        return ", ".join(labels[:limit])
-
     def _paragraph_spans(src: str) -> list[tuple[int, int, str]]:
         spans: list[tuple[int, int, str]] = []
         last_end = 0
@@ -580,10 +577,13 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
             if para_labels:
                 return ", ".join(para_labels[:limit])
             break
-
-    # Fallback: return bare labels if paragraph-scoped extraction failed.
+        
     bare_labels = _collect_labels_in_span(0, len(text))
-    return ", ".join(bare_labels[:limit]) if bare_labels else "if present"
+    for label in labels:
+        for bare_label in bare_labels:
+            if not label.lower().endswith(bare_label.lower()) and not label.lower().startswith(bare_label.lower()):
+                labels.append(bare_label)
+    return ", ".join(labels[:limit]) if labels else "if present"
 
 def _trim(s: str, max_len=360):
     s = _clean(s)
