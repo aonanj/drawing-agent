@@ -27,6 +27,12 @@ _REL_PHRASES = [
     r"linked to", r"engaged with", r"supported by", r"supported on", r"in communication with", r"communicates with",
     r"fluidly connected to", r"in fluid communication with", r"electrically connected to", r"in electrical communication with",
     r"interfaces with", r"between", r"extends between", r"within", r"inside", r"outside", r"adjacent to", r"above", r"below",
+    # CHANGED: Added more common phrases
+    r"disposed on", r"disposed in", r"disposed over", r"disposed between", r"disposed adjacent to",
+    r"positioned in", r"positioned on", r"positioned over", r"positioned inside", r"positioned between",
+    r"located in", r"located on", r"located near",
+    r"extends from", r"extends to", r"extends over", r"extends about", r"extends through",
+    r"secured to", r"operably coupled to",
 ]
 _REL_RX = re.compile("|".join(rf"\b{p}\b" for p in _REL_PHRASES), re.I)
 
@@ -56,6 +62,24 @@ _REL_VARIANTS = [
     ("adjacent to", r"\badjacent\s+(?:to|with)\b"),
     ("above", r"\babove\b"),
     ("below", r"\bbelow\b"),
+    # CHANGED: Added regex for new variants
+    ("disposed on", r"\bdispos(?:ed|es|ing)?\s+(?:on|over|upon)\b"),
+    ("disposed in", r"\bdispos(?:ed|es|ing)?\s+(?:in|within|inside)\b"),
+    ("disposed between", r"\bdispos(?:ed|es|ing)?\s+between\b"),
+    ("disposed adjacent to", r"\bdispos(?:ed|es|ing)?\s+adjacent\s+(?:to|with)\b"),
+    ("positioned on", r"\bposition(?:ed|s|ing)?\s+(?:on|over|upon)\b"),
+    ("positioned in", r"\bposition(?:ed|s|ing)?\s+(?:in|within|inside)\b"),
+    ("positioned between", r"\bposition(?:ed|s|ing)?\s+between\b"),
+    ("located on", r"\blocat(?:ed|es|ing)?\s+(?:on|over|upon)\b"),
+    ("located in", r"\blocat(?:ed|es|ing)?\s+(?:in|within|inside)\b"),
+    ("located near", r"\blocat(?:ed|es|ing)?\s+near\b"),
+    ("extends from", r"\bextend(?:s|ed|ing)?\s+from\b"),
+    ("extends to", r"\bextend(?:s|ed|ing)?\s+to\b"),
+    ("extends over", r"\bextend(?:s|ed|ing)?\s+over\b"),
+    ("extends about", r"\bextend(?:s|ed|ing)?\s+about\b"),
+    ("extends through", r"\bextend(?:s|ed|ing)?\s+through\b"),
+    ("secured to", r"\bsecur(?:ed|es|ing)?\s+to\b"),
+    ("defined by", r"\bdefin(?:ed|es|ing)?\s+by\b"),
 ]
 _REL_VARIANT_RX = [(label, re.compile(pat, re.I)) for label, pat in _REL_VARIANTS]
 
@@ -78,14 +102,25 @@ _REL_BOUNDARY_TOKENS = {
     "interface", "interfaces", "interfacing", "interfaced",
     "extend", "extends", "extended", "extending",
     "fluidly", "electrically", "between", "within", "inside", "outside", "adjacent", "above", "below",
+    # CHANGED: Added new boundary tokens
+    "disposed", "disposes", "disposing",
+    "positioned", "positions", "positioning",
+    "located", "locates", "locating",
+    "secured", "secures", "securing",
+    "defined", "defines", "defining",
 }
 
 _ENTITY_LEADING_FILLERS = {
     "a", "an", "the", "this", "that", "these", "those", "said", "such", "another", "its", "their",
     "fig", "figs", "figure", "to", "with", "of", "for", "in", "on", "at",
+    # CHANGED: Added common filler nouns/adjectives
+    "one", "first", "second", "third", "other",
+    "portion", "part", "member", "element", "component", "device", "system", "assembly",
 }
 _ENTITY_TRAILING_FILLERS = {
     "and", "or", "of", "to", "with", "for", "in", "on", "at", "respectively",
+    # CHANGED: Added common filler nouns
+    "portion", "part", "member", "element", "component", "device", "system", "assembly",
 }
 _ENTITY_SKIP_MIDDLE = {
     "is", "are", "was", "were", "be", "been", "being",
@@ -145,8 +180,11 @@ def _gather_relation_side(tokens, sentence: str, *, boundary_pos: int, start_idx
             gap_text = sentence[gap_start:gap_end]
         if any(ch in gap_text for ch in _REL_PUNCT_BOUNDARIES):
             break
-        if direction == -1 and "," in gap_text:
-            break
+        
+        # CHANGED: Removed comma-break rule, it was too aggressive
+        # if direction == -1 and "," in gap_text:
+        #     break
+        
         if include_token:
             if direction == -1:
                 collected.insert(0, token_text)
@@ -236,8 +274,9 @@ def _top_k_words(text: str, k=25):
         "system", "device", "method", "apparatus", "component", "unit", "module", "figure", "fig", "fig.",
         "diagram", "view", "example", "exemplary", "may", "can", "one", "two", "three", "first", "second", "third", "accordance", "embodiment", "present", "disclosure", "invention", "figs.", "figs", "etc", "etc.", "such", "including", "shown", "includes", "used", "using", "also", "use", "different", "various", "variety", "conceptual", "illustrating", "more", "techniques", "scenario", "which", "where", "when", "according", "combining", "aspect", "comprising",
     }
+    starts_with = {"compris", "includ", "hav", "contain", "form", "generat", "provid", "configur", "adapt", "operat", "connect", "coupl", "mount", "attach", "support", "communicat", "interfac", "transmit", "receiv", "process", "calculat", "determin", "select", "control", "regulat", "modulat", "adjust", "align", "position", "orient", "rotat", "mov", "extend", "retract", "insert", "engag", "disengag", "activat", "deactivat", "illustrat", "depict", "correspond", "represent", "show", "plurality", "number", "various", "several", "multiple", "different", "diverse", "assorted", "distinct", "varied", "variegated", "utiliz", "employ", "implement", "execut", "perform", "oper", "function"}
     words = [w.lower() for w in _WORD_RX.findall(text)]
-    words = [w for w in words if w not in stop and len(w) > 2]
+    words = [w for w in words if w not in stop and len(w) > 2 and not any(w.startswith(pref) for pref in starts_with) and not w.endswith("ing")]
     counts = Counter(words)
     return ", ".join(w for w,_ in counts.most_common(k))
 
@@ -340,11 +379,11 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
             (?P<prefix>{prefix_pattern})
             (?P<body>
                 (?:
-                    \d+[A-Za-z]*           # digits with optional trailing letters (e.g., 302, 302A)
+                    \d+[A-Za-z]* # digits with optional trailing letters (e.g., 302, 302A)
                     |
                     [A-Za-z]+\d+           # letter-digit combos (e.g., 3A1)
                 )
-                (?:[-/][0-9A-Za-z]+)*     # hyphenated or slashed extensions (e.g., 302-1, 302A/302B)
+                (?:[-/][0-9A-Za-z]+)* # hyphenated or slashed extensions (e.g., 302-1, 302A/302B)
             )
             (?P<prime>['′])?
         )
@@ -359,9 +398,12 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
         "may", "can", "will", "shall", "would", "could", "should",
         "this", "that", "these", "those", "another", "such", "its", "their",
         "of", "in", "on", "at", "by", "for", "with", "within", "between", "to", "from", "into", "onto",
+        # CHANGED: Also skip figure markers from context
+        "fig", "figs", "figure", "fig.", "figs.",
     }
     connector_stops = {"and", "or"}
-    punctuation_stops = {".", ",", ";", ":", "!", "?", "(", ")", "[", "]", "{", "}", "\""}
+    # CHANGED: Relaxed punctuation stops, removed comma
+    punctuation_stops = {".", ";", ":", "!", "?", "(", ")", "[", "]", "{", "}", "\""}
     ordinal_suffixes = {"st", "nd", "rd", "th"}
     context_break_tokens = {
         "illustrate", "illustrates", "illustrated", "illustrating",
@@ -389,21 +431,29 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
         while i >= 0 and len(parts) < 4:
             tok = tokens[i]
             gap = text[tok.end(): tokens[i + 1].start()]
-            if any(ch in gap for ch in ".;:?!\n"):
+            if any(ch in gap for ch in ".;:?!\n"): # Stop on hard punctuation in gap
                 break
             word = tok.group()
             lower = word.lower()
-            if lower in connector_stops or lower in punctuation_stops:
+            
+            # CHANGED: Relaxed break conditions
+            # Only break on sentence-ending punctuation, not commas or connectors
+            if lower in punctuation_stops:
                 break
             if lower in context_break_tokens or lower in _REL_BOUNDARY_TOKENS:
                 break
+                
             if lower in skip_tokens:
                 i -= 1
                 continue
-            if any(ch.isdigit() for ch in word):
-                break
+                
+            # CHANGED: Removed this check. It was buggy and blocked contexts like "item 102"
+            # if any(ch.isdigit() for ch in word):
+            #     break
+                
             parts.insert(0, word)
             i -= 1
+            
         while len(parts) > 1 and parts and parts[0].lower() in skip_tokens:
             parts.pop(0)
         if parts:
@@ -421,16 +471,22 @@ def _extract_labels(text: str, fig_label: str | None = None, limit=20):
                 break
             word = tok.group()
             lower = word.lower()
-            if lower in connector_stops or lower in punctuation_stops:
+
+            # CHANGED: Relaxed break conditions
+            if lower in punctuation_stops:
                 break
             if lower in context_break_tokens or lower in _REL_BOUNDARY_TOKENS:
                 break
+                
             if lower in skip_tokens:
                 skipped_leading = True
                 j += 1
                 continue
-            if any(ch.isdigit() for ch in word):
-                break
+                
+            # CHANGED: Removed buggy digit check
+            # if any(ch.isdigit() for ch in word):
+            #     break
+                
             right_parts.append(word)
             skipped_leading = True
             j += 1
