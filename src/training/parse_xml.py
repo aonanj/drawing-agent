@@ -28,8 +28,14 @@ def _is_independent_claim(claim_el):
     for dep_key in DEPENDENCY_ATTRS:
         if attr_map.get(dep_key):
             return False
-    claim_refs = claim_el.xpath(".//*[local-name()='claim-ref' or local-name()='claim-reference']")
-    return not claim_refs
+            
+    # CHANGED: Added hasattr check to satisfy linters
+    if hasattr(claim_el, "xpath"):
+        claim_refs = claim_el.xpath(".//*[local-name()='claim-ref' or local-name()='claim-reference']")
+        return not claim_refs
+    
+    # Fallback if xpath isn't present for some reason
+    return True
 
 def _textify(nodes):
     """Yield clean strings from a list of lxml nodes or raw values."""
@@ -73,25 +79,40 @@ def parse_doc(xml_path):
         claim_elements = [claim_elements_result]
     else:
         claim_elements = []
+        
     claims_segments = []
     method_claim_text = None
     first_independent_claim = None
+
+    # Per user request: first_independent_claim is *always* the first claim.
+    if claim_elements:
+        first_independent_claim = " ".join(_textify([claim_elements[0]]))
+
     for claim_el in claim_elements:
         claim_text = " ".join(_textify([claim_el]))
         if not claim_text:
             continue
         claims_segments.append(claim_text)
-        if method_claim_text is None and METHOD_RX.search(claim_text):
-            method_claim_text = claim_text
-        if first_independent_claim is None and _is_independent_claim(claim_el):
-            first_independent_claim = claim_text
+        
+        # Per user request: method_claim_text is the *first* claim
+        # where "method" appears in the *first* <claim-text> tag.
+        
+        # CHANGED: Added hasattr check to satisfy linters
+        if method_claim_text is None and hasattr(claim_el, "xpath"):
+            # Find the first <claim-text> sub-element
+            first_claim_text_nodes = claim_el.xpath("(.//*[local-name()='claim-text'])[1]") #type: ignore
+            if first_claim_text_nodes:
+                # Get the text *only* of that sub-element
+                first_claim_text = " ".join(_textify(first_claim_text_nodes))
+                if METHOD_RX.search(first_claim_text):
+                    # If it matches, store the text of the *entire* claim
+                    method_claim_text = claim_text
+    
     if claims_segments:
         claims_text = " ".join(claims_segments)
     else:
         claim_nodes = x.xpath("//claims//claim//claim-text | //claims//claim//p | //claims//claim")
         claims_text = " ".join(_textify(claim_nodes))
-    if not first_independent_claim and claims_segments:
-        first_independent_claim = claims_segments[0]
 
     # 4) Extract per-figure numbers from titles to aid image matching
     figure_nums = []
@@ -102,8 +123,8 @@ def parse_doc(xml_path):
     return {
         "figure_paras": fig_ps,      # cleaned paragraph strings that mention figures
         "titles": titles,            # cleaned captions/titles
-        "claims": claims_text,       # big flat string
-        "method_claim": method_claim_text,
-        "first_independent_claim": first_independent_claim or "",
+        "claims": claims_text,       # big flat string (all claims)
+        "method_claim": method_claim_text, # Text of *first* method claim
+        "first_independent_claim": first_independent_claim or "", # Text of *first* claim
         "figure_nums": sorted(set(figure_nums))  # e.g., ["1", "2", "3A"]
     }
