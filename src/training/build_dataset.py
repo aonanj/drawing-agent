@@ -285,7 +285,8 @@ def process_tiff(
         fig_text = _choose_fig_text(meta, fig_num)
         diagram_type = classify_diagram_type(fig_text)
         method_claim = meta.get("method_claim") or ""
-        default_claims = claims_text or meta.get("claims", "") or ""
+        first_independent_claim = meta.get("first_independent_claim") or ""
+        default_claims = first_independent_claim or claims_text or meta.get("claims", "") or ""
         claims_source = method_claim if (diagram_type == "flowchart" and method_claim) else default_claims
 
         # Use the full tile image (no cropping)
