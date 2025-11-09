@@ -48,7 +48,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, Iterable
+from typing import Callable, Dict
 
 # Local modules
 from psycopg.rows import tuple_row
@@ -158,6 +158,55 @@ def extract_fig_num(label: str | None) -> str | None:
     return canon or None
 
 
+def _upsert_text_sections(cur, doc_id: str, meta: Dict) -> None:
+    """Populate caption/paragraph/claim text so downstream FTS queries work."""
+    captions = "\n".join(meta.get("titles") or [])
+    paragraphs = "\n".join(meta.get("figure_paras") or [])
+    claims = meta.get("claims", "") or ""
+    rows = [
+        (doc_id, "caption", captions),
+        (doc_id, "paragraph", paragraphs),
+        (doc_id, "claim", claims),
+    ]
+    cur.executemany(
+        """
+        INSERT INTO text_fts (doc_id, section, content)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (doc_id, section)
+        DO UPDATE SET content = EXCLUDED.content
+        """,
+        rows,
+    )
+
+
+def _upsert_figure(
+    cur,
+    *,
+    figure_id: str,
+    doc_id: str,
+    tiff_path: str,
+    fig_label: str | None,
+    bbox: tuple[int, int, int, int],
+) -> None:
+    x1, y1, x2, y2 = bbox
+    cur.execute(
+        """
+        INSERT INTO figures (id, doc_id, tiff_path, fig_label, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (id)
+        DO UPDATE SET
+          doc_id = EXCLUDED.doc_id,
+          tiff_path = EXCLUDED.tiff_path,
+          fig_label = EXCLUDED.fig_label,
+          bbox_x1 = EXCLUDED.bbox_x1,
+          bbox_y1 = EXCLUDED.bbox_y1,
+          bbox_x2 = EXCLUDED.bbox_x2,
+          bbox_y2 = EXCLUDED.bbox_y2
+        """,
+        (figure_id, doc_id, tiff_path, fig_label, x1, y1, x2, y2),
+    )
+
+
 # ------------ Core builders ------------
 
 def _choose_fig_text(meta: Dict, fig_num: str | None) -> str:
@@ -238,9 +287,9 @@ def process_tiff(
     out_img_dir: Path,
     out_ctrl_dir: Path,
     jsonl_file,
-    claims_text: str,
-    fig_nums_from_xml: Iterable[str],
+    meta: Dict,
     target_size: int = 2048,
+    figure_recorder: Callable[[str, str, str, str | None, tuple[int, int, int, int]], None] | None = None,
 ) -> int:
     """
     Split a TIFF page into figure crops, save PNGs + control maps, and emit JSONL rows.
@@ -259,9 +308,8 @@ def process_tiff(
         return 0
 
     # Prepare shared text block for prompts
-    meta = parse_doc(str(xml_path))
     fig_nums_xml_set: set[str] = set()
-    fig_nums_source = fig_nums_from_xml or meta.get("figure_nums", []) or []
+    fig_nums_source = meta.get("figure_nums", []) or []
     for raw_num in fig_nums_source:
         canon = canonical_fig_num(raw_num)
         if canon:
@@ -286,7 +334,8 @@ def process_tiff(
         diagram_type = classify_diagram_type(fig_text)
         method_claim = meta.get("method_claim") or ""
         first_independent_claim = meta.get("first_independent_claim") or ""
-        default_claims = first_independent_claim or claims_text or meta.get("claims", "") or ""
+        claims_text = meta.get("claims", "") or ""
+        default_claims = first_independent_claim or claims_text
         claims_source = method_claim if (diagram_type == "flowchart" and method_claim) else default_claims
 
         # Use the full tile image (no cropping)
@@ -339,6 +388,14 @@ def process_tiff(
             "label_in_xml": bool(match_xml),
         }
         jsonl_file.write(json.dumps(row, ensure_ascii=False) + "\n")
+        if figure_recorder:
+            figure_recorder(
+                row["id"],
+                doc_id,
+                str(tiff_path),
+                fig_label,
+                (int(x1), int(y1), int(x2), int(y2)),
+            )
         written += 1
     return written
 
@@ -359,51 +416,68 @@ def main(dsn: str | None, out_dir: Path, jsonl_out: Path, split: str) -> None:
             cur.execute("SELECT doc_id, xml, tiffs FROM docs")
             rows = cur.fetchall()
 
-    with open(jsonl_out, "w", encoding="utf-8") as jf:
-        for doc_id, xml, tiffs_value in rows:
-            xml_path = Path(xml)
-            if not xml_path.exists():
-                continue
-
-            # Parse once per doc to get claims and figure numbers
-            meta = parse_doc(str(xml_path))
-            claims_text = meta.get("claims", "") or ""
-            fig_nums_from_xml = meta.get("figure_nums", []) or []
-
-            if isinstance(tiffs_value, str):
-                try:
-                    tiffs = json.loads(tiffs_value or "[]")
-                except Exception:
-                    tiffs = []
-            elif tiffs_value is None:
-                tiffs = []
-            else:
-                tiffs = list(tiffs_value)
-            if not tiffs:
-                continue
-
-            total_docs += 1
-            for tiff in tiffs:
-                tiff_path = Path(tiff)
-                if not tiff_path.exists():
-                    continue
-                name_upper = tiff_path.name.upper()
-                if name_upper.endswith("D00000.TIF") or name_upper.endswith("D00000.TIFF"):
-                    continue
-                total_pages += 1
-
-                figs = process_tiff(
+        with conn.cursor() as write_cur:
+            def record_figure(
+                figure_id: str,
+                doc_id: str,
+                tiff_path: str,
+                fig_label: str | None,
+                bbox: tuple[int, int, int, int],
+            ) -> None:
+                _upsert_figure(
+                    write_cur,
+                    figure_id=figure_id,
                     doc_id=doc_id,
-                    xml_path=xml_path,
                     tiff_path=tiff_path,
-                    out_img_dir=out_img_dir,
-                    out_ctrl_dir=out_ctrl_dir,
-                    jsonl_file=jf,
-                    claims_text=claims_text,
-                    fig_nums_from_xml=fig_nums_from_xml,
-                    target_size=2048,
+                    fig_label=fig_label,
+                    bbox=bbox,
                 )
-                total_figs += figs
+
+            with open(jsonl_out, "w", encoding="utf-8") as jf:
+                for doc_id, xml, tiffs_value in rows:
+                    xml_path = Path(xml)
+                    if not xml_path.exists():
+                        continue
+
+                    # Parse once per doc to get claims, figure numbers, and text sections
+                    meta = parse_doc(str(xml_path))
+                    _upsert_text_sections(write_cur, doc_id, meta)
+
+                    if isinstance(tiffs_value, str):
+                        try:
+                            tiffs = json.loads(tiffs_value or "[]")
+                        except Exception:
+                            tiffs = []
+                    elif tiffs_value is None:
+                        tiffs = []
+                    else:
+                        tiffs = list(tiffs_value)
+                    if not tiffs:
+                        continue
+
+                    total_docs += 1
+                    for tiff in tiffs:
+                        tiff_path = Path(tiff)
+                        if not tiff_path.exists():
+                            continue
+                        name_upper = tiff_path.name.upper()
+                        if name_upper.endswith("D00000.TIF") or name_upper.endswith("D00000.TIFF"):
+                            continue
+                        total_pages += 1
+
+                        figs = process_tiff(
+                            doc_id=doc_id,
+                            xml_path=xml_path,
+                            tiff_path=tiff_path,
+                            out_img_dir=out_img_dir,
+                            out_ctrl_dir=out_ctrl_dir,
+                            jsonl_file=jf,
+                            meta=meta,
+                            target_size=2048,
+                            figure_recorder=record_figure,
+                        )
+                        total_figs += figs
+            conn.commit()
 
     # Minimal run summary to stderr
     import sys
