@@ -442,7 +442,9 @@ wc -l data/ds/*.jsonl
 
 ## ➣ Project Status
 
-This project is in active development. Current checkpoints available:
+Deprecated. Functionality is integrated into PatAxis project (comprehensive AI drafting assistant for patent applications; beta release target for May 2026. 
+
+LORA fine-tuning parameters are fres to download. Attribution required for commercial use. Most recent Lora fine-tuning checkpoints:
 - `outputs/sdxl-qlora-run-3/checkpoint-3500/`: Latest trained model
 - Multiple intermediate checkpoints at 500-step intervals
 
