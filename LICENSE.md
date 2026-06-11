@@ -12,8 +12,7 @@ Copyright © 2025 Phaethon Order LLC. All rights reserved.
 
 ### Evaluation License
 
-* Permission is granted **solely for limited, non-commercial evaluation and review by parties directly given written permission** to access this repository and the associated web service using the demo login credentials. 
-    - The developer's resume qualifies as written permission only if directly provided by the developer.  
+* Permission is granted **solely for limited, non-commercial evaluation and review by parties given written permission** to access this repository and the associated web service using the demo login credentials. 
 
 * Production use or use for any commercial, research, or derivative activity is **prohibited by this Evaluation License**.
 
