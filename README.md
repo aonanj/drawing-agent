@@ -442,16 +442,16 @@ wc -l data/ds/*.jsonl
 
 ## ➣ Project Status
 
-Deprecated. Functionality is integrated into PatAxis project (comprehensive AI drafting assistant for patent applications; beta release target for May 2026. 
+Deprecated. Functionality will be available in comprehensive solution for drafting patent applications (beta release target: 9/26). Contact for access. 
 
-LORA fine-tuning parameters are fres to download. Attribution required for commercial use. Most recent Lora fine-tuning checkpoints:
+LORA fine-tuning parameters are free to download. Attribution required for commercial use. Most recent Lora fine-tuning checkpoints:
 - `outputs/sdxl-qlora-run-3/checkpoint-3500/`: Latest trained model
 - Multiple intermediate checkpoints at 500-step intervals
 
 ## ➣ License
 
 This repository is publicly viewable for portfolio purposes only. The code is proprietary.
-Copyright © 2025 Phaethon Order LLC. All rights reserved.
+Copyright © 2026 Phaethon Order LLC. All rights reserved.
 See [LICENSE](LICENSE.md) for terms.
 
 ## ➣ Resources
