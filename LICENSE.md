@@ -2,7 +2,7 @@
 
 ```
 SPDX-License-Identifier: LicenseRef-PhaethonOrder-Proprietary
-Copyright © 2025 Phaethon Order LLC. All rights reserved.
+Copyright © 2026 Phaethon Order LLC. All rights reserved.
 ```
 
 ### Commercial Service Notice
