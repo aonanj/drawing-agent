@@ -443,11 +443,11 @@ wc -l data/ds/*.jsonl
 ## ➣ Project Status
 
 This project is in active development. Current checkpoints available via GCP Storage.
-- Link: (Fine-tuning manifest)[https://storage.googleapis.com/pollc-figure-agent-config?list-type=2]
+- Link: [Fine-tuning manifest (XML)](https://storage.googleapis.com/pollc-figure-agent-config?list-type=2)
 - Download most recent fine-tuning parameters:
-  - (Safetensors)[https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_model.safetensors]
-  - (LorA Unet Configuration)[https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_config.json]
-  - (README.md)[https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/README.md]
+  - [Checkpoint Parameters (safetensors)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_model.safetensors)
+  - [LorA Unet Configuration (JSON)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_config.json)
+  - [Read Me (markdown)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/README.md)
 - Other intermediate checkpoints at 500-step intervals
 
 ## ➣ License
