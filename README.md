@@ -442,13 +442,16 @@ wc -l data/ds/*.jsonl
 
 ## ➣ Project Status
 
-This project is in active development. Current checkpoints available via GCP Storage.
-- Link: [Fine-tuning manifest (XML)](https://storage.googleapis.com/pollc-figure-agent-config?list-type=2)
-- Download most recent fine-tuning parameters:
-  - [Checkpoint Parameters (safetensors)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_model.safetensors)
-  - [LorA Unet Configuration (JSON)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_config.json)
-  - [Read Me (markdown)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/README.md)
+**DEPRECATED**: This project is now inactive. Further development has been folded into a commercial project. Last checkpoints available via GCP Storage.
+- [Storage manifest (XML)](https://storage.googleapis.com/pollc-figure-agent-config?list-type=2)
+- Download latest fine-tuning configuration:
+  - [LoRA Adapters (safetensors)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_model.safetensors)
+  - [Adapter Settings (JSON)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_config.json)
+  - [README.md (markdown)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/README.md)
 - Other intermediate checkpoints at 500-step intervals
+  - Adapters: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/adapter_model.safetensors`
+  - Settings: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/adapter_config.json`
+  - README: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/README.md`
 
 ## ➣ License
 
