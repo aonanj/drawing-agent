@@ -1,8 +1,11 @@
 # drawing-agent: SDXL QLoRA Fine-Tuning for Patent Drawings
 
-Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. This project provides a complete pipeline for processing USPTO patent data and training a model to generate patent-compliant line art.
+> Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. 
+> This project provides a complete pipeline for processing USPTO patent data and training a model to generate patent-compliant line art.
 
-## ➣ Features
+---
+
+## 1. Features
 
 - **Automated USPTO Data Processing**: Parse XML patent files, extract claims and descriptions, process multi-figure TIFF images
 - **Intelligent Image Processing**: OCR-based figure detection, binarization, deskewing, denoising, and splitting of multi-figure sheets
@@ -13,7 +16,9 @@ Generate patent-style technical drawings from text using fine-tuned Stable Diffu
 - **QLoRA Fine-tuning**: Memory-efficient 4-bit quantized training with LoRA adapters
 - **Make-based Workflow**: Modular pipeline with incremental processing and database management
 
-## ➣ Quick Start
+---
+
+## 2. Quick Start
 
 ```bash
 # 0. Configure Neon connection string (once per shell)
@@ -41,7 +46,9 @@ accelerate config
 bash scripts/run_finetune.sh
 ```
 
-## ➣ Repository Layout
+---
+
+## 3. Repository Layout
 
 ```
 drawing-agent/
@@ -80,9 +87,11 @@ drawing-agent/
 └── README.md                    # This file
 ```
 
-> **Note:** The patent index now lives in Neon (Postgres). Set the `DATABASE_URL` (or `NEON_DATABASE_URL`) environment variable to point at your Neon connection string before running the pipeline.
+> **Note:** Patent index stored in DB (Neon.tech). Set `DATABASE_URL` env var.
 
-## ➣ Makefile Commands
+---
+
+## 4. Makefile Commands
 
 ```bash
 # Database setup
@@ -107,7 +116,9 @@ make clean-all       # Clear database tables and remove extracted files
 
 ```
 
-## ➣ Dataset Structure
+---
+
+## 5. Dataset Structure
 
 Each training sample in the JSONL output includes:
 
@@ -141,7 +152,9 @@ Each training sample in the JSONL output includes:
 - **resize_meta**: Metadata for reversing the letterbox transformation
 - **bbox**: Figure bounding box coordinates from OCR-detected labels
 
-## ➣ Structured Prompts
+---
+
+## 6. Structured Prompts
 
 Prompts are hierarchically constructed by `prompt.py`:
 
@@ -166,9 +179,11 @@ Prohibitions: no shading, no color, no text outside reference numerals
 Automatically classified based on text analysis: flowchart, block diagram, mechanical, 
 electrical schematic, graph, perspective, orthographic
 
-## ➣ Configuration
+---
 
-### Dataset (`configs/dataset.figures.yaml`)
+## 7. Configuration
+
+### 7.1 Dataset (`configs/dataset.figures.yaml`)
 
 ```yaml
 storage:
@@ -193,7 +208,7 @@ image_processing:
   random_flip: false
 ```
 
-### Training (`configs/training.sdxl-qlora.yaml`)
+### 7.2 Training (`configs/training.sdxl-qlora.yaml`)
 
 ```yaml
 model:
@@ -219,21 +234,23 @@ training:
   lr_scheduler: cosine_with_restarts
 ```
 
-## ➣ Pipeline Overview
+---
 
-### 1. Indexing (`index_docs.py`)
+## 8. Pipeline Overview
+
+### 8.1 Indexing (`index_docs.py`)
 - Scans `data/raw/` for `.zip` files containing patents
 - Validates: exactly 1 XML + at least 1 TIFF per zip
 - Extracts files to `data/work/extracted/`
 - Records paths in Neon/Postgres (set `DATABASE_URL` or `NEON_DATABASE_URL`)
 
-### 2. XML Parsing (`parse_xml.py`)
+### 8.2 XML Parsing (`parse_xml.py`)
 - Extracts figure descriptions, claims, and titles from patent XML
 - Supports multiple USPTO Red Book formats
 - Identifies method claims for flowchart detection
 - Returns structured metadata for prompt generation
 
-### 3. Image Processing (`img_norm.py`)
+### 8.3 Image Processing (`img_norm.py`)
 - **OCR-based Figure Detection**: Uses Tesseract to locate "FIG." labels on TIFF pages
 - **Figure Extraction**: Analyzes horizontal gaps to split multi-figure sheets
 - **Binarization**: Otsu thresholding for clean monochrome line art
@@ -241,22 +258,24 @@ training:
 - **Denoising**: Morphological operations + connected components filtering
 - **Letterboxing**: Pads to 2048x2048 with white background, preserving metadata for reversal
 
-### 4. Control Maps (`control.py`)
+### 8.4 Control Maps (`control.py`)
 - Generates Canny edge maps (60/180 thresholds)
 - Perfect for ControlNet conditioning during training
 
-### 5. Prompt Generation (`prompt.py`)
+### 8.5 Prompt Generation (`prompt.py`)
 - **Diagram Type Detection**: Analyzes text for flowchart, block diagram, mechanical, etc.
 - **Spatial Relations**: Extracts "connected to", "between", "adjacent to" relationships
 - **Hierarchical Assembly**: Combines figure descriptions, claims, and spatial context
 - **Style Enforcement**: Adds USPTO-specific constraints and prohibitions
 
-### 6. Dataset Building (`build_dataset.py`)
+### 8.6 Dataset Building (`build_dataset.py`)
 - Combines processed images, control maps, and prompts
 - Generates JSONL files for train/val/test splits
 - Includes bounding boxes and resize metadata for each figure
 
-## ➣ Hardware Requirements
+---
+
+## 9. Hardware Requirements
 
 **Minimum:**
 - 1× GPU with 24GB VRAM (RTX 4090, A10G)
@@ -273,27 +292,31 @@ training:
 - 1000 patents: ~30-90 minutes
 - Training: ~2-8 hours for 3 epochs
 
-## ➣ Key Technologies
+---
 
-### Core Dependencies
+## 10. Third-Party Services
+
+### 10.1 Core Dependencies
 - **PyTorch 2.9+**: Deep learning framework
 - **Diffusers 0.35+**: SDXL model and training utilities
 - **PEFT 0.17+**: Parameter-efficient fine-tuning (LoRA/QLoRA)
 - **Accelerate 1.11+**: Distributed training and mixed precision
 - **BitsAndBytes 0.42+**: 4-bit quantization for QLoRA
 
-### Image Processing
+### 10.2 Image Processing
 - **OpenCV**: Image manipulation, binarization, deskewing
 - **Pytesseract**: OCR for figure label detection
 - **Pillow**: Image I/O and basic processing
 - **scikit-image**: Advanced image processing utilities
 
-### Data Management
+### 10.3 Data Management
 - **Neon/Postgres (psycopg)**: Patent index and full-text search
 - **lxml**: Fast XML parsing
 - **Datasets**: HuggingFace dataset loading and processing
 
-## ➣ Model Inference
+---
+
+## 11. Model Inference
 
 After training, generate patent-style drawings using the fine-tuned model:
 
@@ -332,7 +355,9 @@ image = pipeline(
 image.save("patent_drawing.png")
 ```
 
-## ➣ Database Schema
+---
+
+## 12. Database Schema
 
 The Neon/Postgres database tracks all processed patents:
 
@@ -373,7 +398,9 @@ SELECT
 FROM docs;
 ```
 
-## ➣ Troubleshooting
+---
+
+## 13. Troubleshooting
 
 **Index fails with "multiple XML files" error:**
 - Each ZIP should contain exactly 1 XML file
@@ -382,7 +409,7 @@ FROM docs;
 **OCR doesn't detect figures:**
 - Verify TIFF resolution is 300+ DPI
 - Check that "FIG." labels are clearly visible in the image
-- Try adjusting Tesseract PSM mode in `img_norm.py`
+- Adjust Tesseract PSM mode in `img_norm.py`
 
 **CUDA out of memory during training:**
 - Reduce `train_batch_size` to 1
@@ -396,11 +423,13 @@ FROM docs;
 - Verify binarization threshold in `img_norm.py`
 
 **Database connection errors:**
-- Ensure `DATABASE_URL` (or `NEON_DATABASE_URL`) is exported in your shell
-- Verify your Neon role has privileges to create tables and run VACUUM
-- Use `make dbinfo` to confirm connectivity and session settings
+- `DATABASE_URL` exported in shell
+- Verify privileges to create tables and run VACUUM
+- `make dbinfo` to confirm connectivity and session settings
 
-## ➣ Dataset Inspection
+---
+
+## 14. Dataset Inspection
 
 Query the database to inspect indexed patents:
 
@@ -440,7 +469,9 @@ head -n 1 data/ds/train.jsonl | jq '.'
 wc -l data/ds/*.jsonl
 ```
 
-## ➣ Project Status
+---
+
+## 15. Project Status
 
 **DEPRECATED**: This project is now inactive. Further development has been folded into a commercial project. Last checkpoints available via GCP Storage.
 - [Storage manifest (XML)](https://storage.googleapis.com/pollc-figure-agent-config?list-type=2)
@@ -453,13 +484,17 @@ wc -l data/ds/*.jsonl
   - Settings: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/adapter_config.json`
   - README: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/README.md`
 
-## ➣ License
+---
+
+## 16. License
 
 This repository is publicly viewable for portfolio purposes only. The code is proprietary.
 Copyright © 2026 Phaethon Order LLC. All rights reserved.
 See [LICENSE](LICENSE.md) for terms.
 
-## ➣ Resources
+---
+
+## 17. Resources
 
 - **USPTO Bulk Data**: https://bulkdata.uspto.gov/
 - **SDXL Base Model**: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
