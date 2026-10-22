@@ -8,24 +8,23 @@ Generate patent-style technical drawings from text using fine-tuned Stable Diffu
 
 **Table of Contents**
 
-[1. Features](#1-features)
-
-[2. Quick Start](#2-quick-start)
-[3. Repository Layout](#3-repository-layout)
-[4. Makefile Commands](#4-makefile-commands)
-[5. Dataset Structure](#5-dataset-structure)
-[6. Structured Prompts](#6-structured-prompts)
-[7. Configuration](#7-configuration)
-[8. Pipeline Overview](#8-pipeline-overview)
-[9. Hardware Requirements](#9-hardware-requirements)
-[10. Third-Party Services](#10-third-party-services)
-[11. Model Inference](#11-model-inference)
-[12. Database Schema](#12-database-schema)
-[13. Troubleshooting](#13-troubleshooting)
-[14. Dataset Inspection](#14-dataset-inspection)
-[15. Project Status](#15-project-status)
-[16. License](#16-license)
-[17. Resources](#17-resources)
+- [1. Features](#1-features)
+- [2. Quick Start](#2-quick-start)
+- [3. Repository Layout](#3-repository-layout)
+- [4. Makefile Commands](#4-makefile-commands)
+- [5. Dataset Structure](#5-dataset-structure)
+- [6. Structured Prompts](#6-structured-prompts)
+- [7. Configuration](#7-configuration)
+- [8. Pipeline Overview](#8-pipeline-overview)
+- [9. Hardware Requirements](#9-hardware-requirements)
+- [10. Third-Party Services](#10-third-party-services)
+- [11. Model Inference](#11-model-inference)
+- [12. Database Schema](#12-database-schema)
+- [13. Troubleshooting](#13-troubleshooting)
+- [14. Dataset Inspection](#14-dataset-inspection)
+- [15. Project Status](#15-project-status)
+- [16. License](#16-license)
+- [17. Resources](#17-resources)
 
 ---
 
