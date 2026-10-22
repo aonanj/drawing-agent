@@ -478,11 +478,11 @@ wc -l data/ds/*.jsonl
 - Download latest fine-tuning configuration:
   - [LoRA Adapters (safetensors)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_model.safetensors)
   - [Adapter Settings (JSON)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/adapter_config.json)
-  - [README.md (markdown)](https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-3500/unet_lora/README.md)
 - Other intermediate checkpoints at 500-step intervals
-  - Adapters: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/adapter_model.safetensors`
-  - Settings: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/adapter_config.json`
-  - README: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-[500...3500]/unet_lora/README.md`
+  - Adapters: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-####/unet_lora/adapter_model.safetensors`
+    - Replace `####` with `500`, `1000`, ... , `3000`. 
+  - Settings: `https://storage.googleapis.com/pollc-figure-agent-config/sdxl-qlora-run-3/checkpoint-####/unet_lora/adapter_config.json`
+    - Replace `####` with `500`, `1000`, ... , `3000`. 
 
 ---
 
