@@ -1,7 +1,43 @@
-# drawing-agent: SDXL QLoRA Fine-Tuning for Patent Drawings
+# Figure Agent
 
-> Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. 
-> This project provides a complete pipeline for processing USPTO patent data and training a model to generate patent-compliant line art.
+**SDXL QLoRA Fine-Tuning for Patent Drawings**
+Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. This project provides a complete pipeline for processing USPTO patent data and training a model to generate drawings that comply with USPTO requirements.
+
+---
+
+**Table of Contents**
+
+- [1. Features](README.md#1-features)
+- [2. Quick Start](README.md#2-quick-start)
+- [3. Repository Layout](README.md#3-repository-layout)
+- [4. Makefile Commands](README.md#4-makefile-commands)
+- [5. Dataset Structure](README.md#5-dataset-structure)
+- [6. Structured Prompts](README.md#6-structured-prompts)
+- [7. Configuration](README.md#7-configuration)
+    - [7.1 Dataset](README.md#71-dataset-configsdatasetfiguresyaml)
+    - [7.2 Training](README.md#72-training-configstrainingsdxl-qlorayaml)
+- [8. Pipeline Overview](README.md#8-pipeline-overview)
+    - [8.1 Indexing](README.md#81-indexing-index_docspy)
+    - [8.2 XML Parsing](README.md#82-xml-parsing-parse_xmlpy)
+    - [8.3 Image Processing](README.md#83-image-processing-img_normpy)
+    - [8.4 Control Maps](README.md#84-control-maps-controlpy)
+    - [8.5 Prompt Generation](README.md#85-prompt-generation-promptpy)
+    - [8.6 Dataset Building](README.md#86-dataset-building-build_datasetpy)
+- [9. Hardware Requirements](README.md#9-hardware-requirements)
+- [10. Third-Party Services](README.md#10-third-party-services)
+    - [10.1 Core Dependencies](README.md#101-core-dependencies)
+    - [10.2 Image Processing](README.md#102-image-processing)
+    - [10.3 Data Management](README.md#103-data-management)
+- [11. Model Inference](README.md#11-model-inference)
+- [12. Database Schema](README.md#12-database-schema)
+- [13. Troubleshooting](README.md#13-troubleshooting)
+- [14. Dataset Inspection](README.md#14-dataset-inspection)
+- [15. Project Status](README.md#15-project-status)
+- [16. License](README.md#16-license)
+- [17. Resources](README.md#17-resources)
+
+---
+
 
 ---
 

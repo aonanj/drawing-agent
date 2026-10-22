@@ -13,6 +13,8 @@ data/processed/
 data/
 docs/
 *.png
+toc.md
+
 
 # Notebooks
 .ipynb_checkpoints/
