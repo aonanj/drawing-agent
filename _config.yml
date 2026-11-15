@@ -25,3 +25,10 @@ readme_index:
 relative_links:
   enabled: true
   collections: true
+
+aonanj_style:
+  repository_public: true
+  owner:
+    name: Phaethon Order LLC
+    username: aonanj
+    email: admin@phaethonorder.com
