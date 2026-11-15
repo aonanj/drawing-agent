@@ -13,6 +13,7 @@ data/processed/
 data/
 docs/
 *.png
+!icon-64x64.png
 toc.md
 
 

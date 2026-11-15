@@ -1,10 +1,7 @@
 # Drawing Agent
 
 **SDXL QLoRA Fine-Tuning for Patent Drawings**
-
-Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. This project provides a complete pipeline for processing USPTO patent data and training a model to generate drawings that comply with USPTO requirements.
-
----
+- Generate patent-style technical drawings from text using fine-tuned Stable Diffusion XL with QLoRA. This project provides a complete pipeline for processing USPTO patent data and training a model to generate drawings that comply with USPTO requirements.
 
 **Table of Contents**
 
