@@ -1,3 +1,27 @@
-remote_theme: pages-themes/modernist@v0.2.0
+remote_theme: aonanj/aonanj-style@main
+repository: aonanj/drawing-agent
+
+url: https://aonanj.github.io
+baseurl: /drawing-agent
+
 plugins:
-- jekyll-remote-theme # add this line to the plugins list if you already have one
+  - jekyll-remote-theme
+  - jekyll-github-metadata
+  - jekyll-readme-index
+  - jekyll-optional-front-matter
+  - jekyll-relative-links
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+readme_index:
+  enabled: true
+  remove_originals: true
+  with_frontmatter: true
+
+relative_links:
+  enabled: true
+  collections: true
