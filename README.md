@@ -516,8 +516,8 @@ See [LICENSE](LICENSE.md) for terms.
 
 ## 17. Resources
 
-- **USPTO Bulk Data**: https://bulkdata.uspto.gov/
-- **SDXL Base Model**: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
-- **PEFT Documentation**: https://huggingface.co/docs/peft
-- **Accelerate Guide**: https://huggingface.co/docs/accelerate
-- **Diffusers Training**: https://huggingface.co/docs/diffusers/training/overview
+- **USPTO Bulk Data**: [https://bulkdata.uspto.gov/](https://bulkdata.uspto.gov/)
+- **SDXL Base Model**: [https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)
+- **PEFT Documentation**: [https://huggingface.co/docs/peft](https://huggingface.co/docs/peft)
+- **Accelerate Guide**: [https://huggingface.co/docs/accelerate](https://huggingface.co/docs/accelerate)
+- **Diffusers Training**: [https://huggingface.co/docs/diffusers/training/overview](https://huggingface.co/docs/diffusers/training/overview)
